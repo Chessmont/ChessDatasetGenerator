@@ -1,0 +1,16 @@
+{
+  "name": "backend",
+  "type": "module",
+  "version": "1.0.0",
+  "main": "api.ts",
+  "license": "MIT",
+  "scripts": {
+    "start": "node dist/api.js"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "nanoid": "^3.3.11",
+    "simple-zstd": "^1.4.2",
+    "unzipper": "^0.12.3"
+  }
+}
