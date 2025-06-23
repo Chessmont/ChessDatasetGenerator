@@ -1,0 +1,16 @@
+{
+  "officialPGNFileName" : "twic-pgnmentor.pgn",
+  "finalPGNFileName" : "chessmont.pgn",
+
+  "withOnlineGame" : true,
+  "minOnlineElo" : 2500,
+  "minGameTime" : 180,
+  "minPlyDepth" : 10,
+
+  "generateFen" : true,
+
+  "chesscom" : {
+    "numberOfUsersInLeaderboard" : 10000,
+    "userAgent" : "exemple/1.0 (contact: your@mail.com)"
+  }
+}

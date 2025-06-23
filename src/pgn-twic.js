@@ -43,7 +43,7 @@ class TwicMain {
     console.time('Temps total');
 
     try {
-      // Récupérer le dernier numéro de semaine disponible
+
       const lastWeek = await this.processor.getLatestWeekNumber();
       console.log(`Dernière semaine disponible: ${lastWeek}`);      let currentWeek = await this.readProgress();
       let totalProcessed = 0;
@@ -58,9 +58,9 @@ class TwicMain {
 
           const stats = await this.processor.processWeek(currentWeek);          totalProcessed += 1;
           totalGames += stats.totalGames;
-          consecutiveErrors = 0; // Reset du compteur d'erreurs
+          consecutiveErrors = 0;
 
-          // Sauvegarder la progression SEULEMENT si le traitement réussit
+
           const nextWeek = currentWeek + 1;
           await this.saveProgress(nextWeek);
 
@@ -75,7 +75,7 @@ class TwicMain {
           if (consecutiveErrors < maxRetries) {
             console.log('🔄 Nouvelle tentative dans 5 secondes...');
             await new Promise(resolve => setTimeout(resolve, 5000));
-            // NE PAS passer à la semaine suivante, réessayer la même semaine
+
           } else {
             console.error(`💥 ÉCHEC FATAL: Impossible de traiter la semaine ${currentWeek} après ${maxRetries} tentatives.`);
             console.error('Le script s\'arrête pour éviter de perdre des données.');
@@ -99,6 +99,6 @@ class TwicMain {
   }
 }
 
-// Lancement du script
+
 const main = new TwicMain();
 main.run().catch(console.error);

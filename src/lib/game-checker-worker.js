@@ -25,18 +25,24 @@ parentPort.on('message', ({ batch, batchId }) => {
             validGames: 0,
             invalidGames: 0,
             errors: {},
-            validResults: [],
             invalidResults: []
         };
 
-        for (const gameText of batch) {
+        for (let i = 0; i < batch.length; i++) {
+            const gameText = batch[i];
             result.totalGames++;
 
             const testResult = testGame(gameText);
 
             if (testResult.valid) {
                 result.validGames++;
-                result.validResults.push(gameText);
+                // Envoyer chaque partie valide immédiatement une par une
+                parentPort.postMessage({
+                    type: 'validGame',
+                    gameText,
+                    batchId,
+                    gameIndex: i
+                });
             } else {
                 result.invalidGames++;
                 result.invalidResults.push({
@@ -49,9 +55,15 @@ parentPort.on('message', ({ batch, batchId }) => {
             }
         }
 
-        parentPort.postMessage({ success: true, result });
+        // Envoyer le résumé final du batch
+        parentPort.postMessage({
+            type: 'batchComplete',
+            success: true,
+            result
+        });
     } catch (error) {
         parentPort.postMessage({
+            type: 'batchComplete',
             success: false,
             error: error.message,
             batchId

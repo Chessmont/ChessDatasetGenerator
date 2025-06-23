@@ -38,7 +38,7 @@ class PgnMentorMain {
     console.time('Temps total');
 
     try {
-      // PRÉPARATION: Charger les hash existants
+
       console.log('🔄 PRÉPARATION: Chargement des parties existantes');
       await this.processor.loadExistingHashes();
       console.log('');
@@ -47,14 +47,14 @@ class PgnMentorMain {
       let uniqueGames = 0;
       let duplicates = 0;
 
-      // PHASE 1: Traitement des fichiers PGN directs (Events)
+
       console.log('🎯 PHASE 1: Traitement des tournois (fichiers PGN directs)');
       console.log('📂 Récupération de la liste des fichiers PGN...');
 
       const allPgnLinks = await this.processor.getAllPgnLinks();
       console.log(`📁 ${allPgnLinks.length} fichiers PGN trouvés`);
 
-      // Charger la progression (unique pour PGN et ZIP)
+
       const progress = await this.readProgress();
       const processedSet = new Set(progress.processedFiles);
 
@@ -89,7 +89,7 @@ class PgnMentorMain {
       console.log(`  Parties uniques ajoutées: ${uniqueGames}`);
       console.log(`  Doublons évités: ${duplicates}\n`);
 
-      // PHASE 2: Traitement des fichiers ZIP (Players/Openings)
+
       console.log('🎯 PHASE 2: Traitement des collections (fichiers ZIP)');
       console.log('📦 Récupération de la liste des fichiers ZIP...');
 
@@ -139,6 +139,6 @@ class PgnMentorMain {
   }
 }
 
-// Lancement du script
+
 const main = new PgnMentorMain();
 main.run().catch(console.error);

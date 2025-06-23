@@ -13,8 +13,8 @@ import { createInterface } from 'readline';
 class PGNMentorProcessor {
   constructor() {
     this.baseUrl = 'https://www.pgnmentor.com';
-    this.outputFile = './scripts/output/pgnmentor.pgn';
-    this.tempDir = './scripts/temp';
+    this.outputFile = './output/pgnmentor.pgn';
+    this.tempDir = './temp';
 
     // Déduplication - Set en mémoire des hash des parties
     this.gameHashes = new Set();
@@ -26,7 +26,7 @@ class PGNMentorProcessor {
     this.ensureDirectories();
   }
   ensureDirectories() {
-    const outputDir = './scripts/output';
+    const outputDir = './output';
     [outputDir, this.tempDir].forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });

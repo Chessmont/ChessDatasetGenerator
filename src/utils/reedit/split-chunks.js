@@ -9,10 +9,10 @@ class ChunkSplitter {
   constructor() {
     this.oldChunksDir = './temp/old';
     this.newChunksDir = './temp';
-    this.maxLinesPerChunk = 3000000; // 3 millions de lignes max par chunk
-    this.globalChunkIndex = 0; // Index global pour nommer les nouveaux chunks
-    this.maxParallelChunks = Math.max(1, os.cpus().length); // Traiter plusieurs chunks en parallèle
-    this.chunkIndexLock = 0; // Pour éviter les collisions d'index
+    this.maxLinesPerChunk = 3000000;
+    this.globalChunkIndex = 0;
+    this.maxParallelChunks = Math.max(1, os.cpus().length);
+    this.chunkIndexLock = 0;
   }
   /**
    * Obtient le prochain index de chunk de manière thread-safe
@@ -26,10 +26,10 @@ class ChunkSplitter {
    */
   async splitSingleChunk(chunkFile) {
     const chunkPath = path.join(this.oldChunksDir, chunkFile);
-    
+
     console.log(`🔄 Division du ${chunkFile}...`);
 
-    // Lire le fichier ligne par ligne pour économiser la mémoire
+
     const fileStream = fs.createReadStream(chunkPath, { encoding: 'utf8' });
     const rl = createInterface({ input: fileStream });
 
@@ -40,18 +40,18 @@ class ChunkSplitter {
     for await (const line of rl) {
       if (line.trim()) {
         currentLines.push(line);
-        
-        // Si on atteint 3M lignes, créer un nouveau chunk
+
+
         if (currentLines.length >= this.maxLinesPerChunk) {
           await this.writeSubChunk(currentLines, chunkFile);
           subChunksCreated++;
           totalLinesProcessed += currentLines.length;
-          currentLines = []; // Reset
+          currentLines = [];
         }
       }
     }
 
-    // Traiter les lignes restantes
+
     if (currentLines.length > 0) {
       await this.writeSubChunk(currentLines, chunkFile);
       subChunksCreated++;
@@ -68,16 +68,16 @@ class ChunkSplitter {
   async writeSubChunk(lines, sourceChunkFile) {
     const chunkIndex = this.getNextChunkIndex();
     const newChunkFile = path.join(this.newChunksDir, `chunk_${chunkIndex}.tmp`);
-    
+
     const writeStream = fs.createWriteStream(newChunkFile, { encoding: 'utf8' });
-    
+
     for (const line of lines) {
       writeStream.write(line + '\n');
     }
-    
+
     writeStream.end();
     await new Promise(resolve => writeStream.on('finish', resolve));
-    
+
     console.log(`   📝 chunk_${chunkIndex}.tmp créé (${lines.length.toLocaleString()} lignes) depuis ${sourceChunkFile}`);
   }  /**
    * Divise tous les chunks
@@ -90,17 +90,17 @@ class ChunkSplitter {
     console.log(`📏 Taille max par chunk: ${this.maxLinesPerChunk.toLocaleString()} lignes`);
     console.log(`🧵 Traitement parallèle: ${this.maxParallelChunks} chunks simultanés\n`);
 
-    // Vérifier que le dossier source existe
+
     if (!fs.existsSync(this.oldChunksDir)) {
       throw new Error(`Dossier source non trouvé: ${this.oldChunksDir}`);
     }
 
-    // Créer le dossier de destination s'il n'existe pas
+
     if (!fs.existsSync(this.newChunksDir)) {
       fs.mkdirSync(this.newChunksDir, { recursive: true });
     }
 
-    // Lister tous les chunks à diviser
+
     const chunkFiles = fs.readdirSync(this.oldChunksDir)
       .filter(file => file.startsWith('chunk_') && file.endsWith('.tmp'))
       .sort((a, b) => {
@@ -117,21 +117,21 @@ class ChunkSplitter {
 
     console.time('⏱️  Division des chunks');
 
-    // Traitement parallèle par batches
+
     let totalSubChunks = 0;
     let totalLinesProcessed = 0;
 
     for (let i = 0; i < chunkFiles.length; i += this.maxParallelChunks) {
       const batch = chunkFiles.slice(i, i + this.maxParallelChunks);
-      
+
       console.log(`🔄 Traitement du batch ${Math.floor(i / this.maxParallelChunks) + 1}/${Math.ceil(chunkFiles.length / this.maxParallelChunks)} (${batch.length} chunks)`);
-      
-      // Traiter le batch en parallèle
+
+
       const results = await Promise.all(
         batch.map(chunkFile => this.splitSingleChunk(chunkFile))
       );
 
-      // Additionner les résultats
+
       for (const result of results) {
         totalSubChunks += result.subChunksCreated;
         totalLinesProcessed += result.totalLinesProcessed;
@@ -143,7 +143,7 @@ class ChunkSplitter {
 
     console.timeEnd('⏱️  Division des chunks');
 
-    // Compter les nouveaux chunks créés
+
     const newChunkFiles = fs.readdirSync(this.newChunksDir)
       .filter(file => file.startsWith('chunk_') && file.endsWith('.tmp'));
 
@@ -168,6 +168,6 @@ class ChunkSplitter {
   }
 }
 
-// Exécution
+
 const splitter = new ChunkSplitter();
 splitter.run();

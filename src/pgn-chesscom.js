@@ -26,15 +26,15 @@ class ChesscomMain {
       console.log('🚀 DÉBUT TRAITEMENT CHESS.COM DATASET');
       console.log('=====================================');
 
-      // Étape 1: S'assurer qu'on a la liste des top 10K
+
       console.log('\n📋 ÉTAPE 1: Récupération des usernames');
       const usernames = await this.leaderboard.ensureUsernames();
       console.log(`✅ Liste prête: ${usernames.length} joueurs`);
 
-      // Étape 2: Récupérer les URLs d'archives de tous les joueurs
+
       console.log('\n� ÉTAPE 2: Récupération des URLs d\'archives');
       await this.archives.processAllUsers();
-      await this.archives.showStats();      // TODO: Étape 3 - Téléchargement des parties
+      await this.archives.showStats();
       console.log('\n🎯 ÉTAPE 3: Téléchargement et filtrage des parties');
       await this.downloader.processAllArchives();      console.log('\n🏆 PIPELINE CHESS.COM TERMINÉ !');
       console.log('================================');
@@ -50,7 +50,7 @@ class ChesscomMain {
   }
 }
 
-// Exécution directe
+
 const main = new ChesscomMain();
 main.run();
 

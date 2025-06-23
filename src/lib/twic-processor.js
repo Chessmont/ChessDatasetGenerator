@@ -8,8 +8,8 @@ import unzipper from 'unzipper';
 class TwicProcessor {  constructor() {
     this.baseUrl = 'https://theweekinchess.com/zips/';
     this.twicPageUrl = 'https://theweekinchess.com/twic';
-    this.outputFile = './scripts/output/twic.pgn';
-    this.tempDir = './scripts/temp';
+    this.outputFile = './output/twic.pgn';
+    this.tempDir = './temp';
     this.ensureDirectories();
   }
 

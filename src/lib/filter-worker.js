@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 
 import { parentPort } from 'worker_threads';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+
+const configPath = path.join(__dirname, '..', '..', 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 class FilterWorker {
   constructor() {
-    this.eloThreshold = 2400;
-    this.timeThreshold = 180;
-    this.minPlyCount = 10;
+    this.eloThreshold = config.minOnlineElo;
+    this.timeThreshold = config.minGameTime;
+    this.minPlyCount = config.minPlyDepth;
   }
 
   /**
@@ -23,23 +33,23 @@ class FilterWorker {
 
     const processCompleteGame = () => {
       if (currentGame.trim()) {
-        totalGames++;        // Filtre ALL: ELO >= 2500 + nombre de coups >= 10
+        totalGames++;
         if (this.shouldKeepGameAll(gameHeaders, currentGame)) {
           gamesAll.push(currentGame);
 
-          // Filtre LIMITED: ELO >= 2500 + Temps >= 3min + nombre de coups >= 10
+
           if (this.shouldKeepGameLimited(gameHeaders, currentGame)) {
             gamesLimited.push(currentGame);
           }
 
-          // Filtre EVAL: ELO >= 2500 + nombre de coups >= 10 + contient des évaluations
+
           if (this.shouldKeepGameEval(currentGame)) {
             gamesEval.push(currentGame);
           }
         }
       }
 
-      // Reset pour la prochaine partie
+
       currentGame = '';
       gameHeaders = {};
       inGameMoves = false;
@@ -79,7 +89,7 @@ class FilterWorker {
       }
     }
 
-    // Traiter la dernière partie si elle existe
+
     if (currentGame) {
       processCompleteGame();
     }    return {
@@ -97,7 +107,7 @@ class FilterWorker {
    * Compte le nombre de coups (ply) dans une partie PGN
    */
   countPly(gameText) {
-    // Extraire seulement la partie des coups (après les headers)
+
     const lines = gameText.split('\n');
     let movesText = '';
     let inMoves = false;
@@ -112,16 +122,16 @@ class FilterWorker {
       }
     }
 
-    // Compter les coups en supprimant les numéros de coups et annotations
+
     const cleanMoves = movesText
-      .replace(/\d+\./g, '') // Supprimer les numéros de coups (1. 2. etc.)
-      .replace(/\{[^}]*\}/g, '') // Supprimer les commentaires {...}
-      .replace(/\([^)]*\)/g, '') // Supprimer les variantes (...)
+      .replace(/\d+\./g, '')
+      .replace(/\{[^}]*\}/g, '')
+      .replace(/\([^)]*\)/g, '')
       .trim();
 
     const moves = cleanMoves.split(/\s+/).filter(move =>
       move.length > 0 &&
-      !move.match(/^(1-0|0-1|1\/2-1\/2|\*)$/) // Exclure les résultats
+      !move.match(/^(1-0|0-1|1\/2-1\/2|\*)$/)
     );
 
     return moves.length;
@@ -135,7 +145,7 @@ class FilterWorker {
     return match ? match[1] : '';
   }
   /**
-   * Critères de filtrage ALL: ELO >= 2500 + coups >= 10
+   * Critères de filtrage ALL: ELO >= config.minOnlineElo + coups >= config.minPlyDepth
    */
   shouldKeepGameAll(gameHeaders, gameText) {
     const whiteElo = gameHeaders.WhiteElo || 0;
@@ -148,15 +158,15 @@ class FilterWorker {
   }
 
   /**
-   * Critères de filtrage LIMITED: ELO >= 2500 + TimeControl >= 600s + coups >= 10
+   * Critères de filtrage LIMITED: ELO >= config.minOnlineElo + TimeControl >= config.minGameTime + coups >= config.minPlyDepth
    */
   shouldKeepGameLimited(gameHeaders, gameText) {
-    // D'abord vérifier les critères ALL
+
     if (!this.shouldKeepGameAll(gameHeaders, gameText)) {
       return false;
     }
 
-    // Puis vérifier le TimeControl >= 600 secondes (10 minutes)
+
     const timeControl = gameHeaders.TimeControl || '';
     const baseTime = this.extractBaseTimeFromTimeControl(timeControl);
     return baseTime >= this.timeThreshold;
@@ -166,7 +176,7 @@ class FilterWorker {
    * Extrait le temps de base d'un TimeControl (ex: "300+0" -> 300)
    */
   extractBaseTimeFromTimeControl(timeControl) {
-    // Format: "300+0" ou "600+5" etc.
+
     const match = timeControl.match(/^(\d+)/);
     return match ? parseInt(match[1]) : 0;
   }
@@ -174,12 +184,12 @@ class FilterWorker {
    * Critères de filtrage EVAL: basé sur ALL + contient des évaluations
    */
   shouldKeepGameEval(gameText) {
-    // Vérifier si la partie contient des évaluations [%eval ...]
+
     return gameText.includes('[%eval ');
   }
 }
 
-// Écouter les messages du thread principal
+
 if (parentPort) {
   const worker = new FilterWorker();
 

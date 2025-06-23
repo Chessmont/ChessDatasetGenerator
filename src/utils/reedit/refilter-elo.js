@@ -22,7 +22,7 @@ class EloRefilter {
         name: 'Chess.com'
       }
     ];
-    this.CHUNK_SIZE = 2 * 1024 * 1024; // 2MB par chunk
+    this.CHUNK_SIZE = 2 * 1024 * 1024;
     this.stats = {
       totalFiles: 0,
       totalGamesInput: 0,
@@ -62,18 +62,18 @@ class EloRefilter {
   async processFile(fileConfig) {
     const { input, output, name } = fileConfig;
 
-    // Statistiques du fichier d'entrée
+
     const inputStats = fs.statSync(input);
     const inputSizeMB = (inputStats.size / (1024 * 1024)).toFixed(2);
 
     console.log(`📊 Fichier d'entrée: ${inputSizeMB} MB`);
     console.log(`🔍 Filtrage ELO >= 2500...`);
 
-    // Initialiser le fichier de sortie
+
     if (fs.existsSync(output)) {
       fs.unlinkSync(output);
     }
-    
+
     let totalGamesInput = 0;
     let totalGamesOutput = 0;
     let processedSize = 0;
@@ -92,7 +92,7 @@ class EloRefilter {
           totalGamesOutput++;
         }
 
-        // Afficher le progrès détaillé
+
         if (totalGamesInput % 5000 === 0) {
           const progress = ((processedSize / inputStats.size) * 100).toFixed(1);
           const keepRate = totalGamesInput > 0 ? ((totalGamesOutput / totalGamesInput) * 100).toFixed(1) : '0.0';
@@ -101,13 +101,13 @@ class EloRefilter {
         }
       }
 
-      // Reset pour la prochaine partie
+
       currentGame = '';
       gameHeaders = {};
       inGameMoves = false;
     };
 
-    // Lire le fichier par chunks
+
     const stream = fs.createReadStream(input, { encoding: 'utf8' });
     let buffer = '';
 
@@ -117,7 +117,7 @@ class EloRefilter {
         processedSize += chunk.length;
 
         const lines = buffer.split('\n');
-        // Garder la dernière ligne incomplète dans le buffer
+
         buffer = lines.pop() || '';
 
         for (const line of lines) {
@@ -146,7 +146,7 @@ class EloRefilter {
             currentGame += line + '\n';
             inGameMoves = true;
 
-            // Détecter la fin de partie
+
             if (line.match(/\s+(1-0|0-1|1\/2-1\/2|\*)\s*$/)) {
               processCompleteGame();
             }
@@ -155,7 +155,7 @@ class EloRefilter {
       });
 
       stream.on('end', () => {
-        // Traiter la dernière ligne restante
+
         if (buffer.trim()) {
           const line = buffer.trim();
           if (line.startsWith('[Event ')) {
@@ -171,14 +171,14 @@ class EloRefilter {
           }
         }
 
-        // Traiter la dernière partie si elle existe
+
         if (currentGame) {
           processCompleteGame();
         }
 
         writeStream.end();
 
-        // Statistiques finales
+
         const outputStats = fs.statSync(output);
         const outputSizeMB = (outputStats.size / (1024 * 1024)).toFixed(2);
         const reductionPercent = (((inputStats.size - outputStats.size) / inputStats.size) * 100).toFixed(1);
@@ -191,7 +191,7 @@ class EloRefilter {
         console.log(`   📏 Taille: ${inputSizeMB} MB → ${outputSizeMB} MB (-${reductionPercent}%)`);
         console.log(`   📁 Sortie: ${path.basename(output)}`);
 
-        // Mettre à jour les stats globales
+
         this.stats.totalFiles++;
         this.stats.totalGamesInput += totalGamesInput;
         this.stats.totalGamesOutput += totalGamesOutput;
@@ -244,7 +244,7 @@ class EloRefilter {
   }
 }
 
-// Exécution directe
+
 const refilter = new EloRefilter();
 refilter.run();
 

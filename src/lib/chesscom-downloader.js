@@ -8,22 +8,30 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Charger la configuration
+const configPath = path.join(__dirname, '..', '..', 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
 class ChesscomDownloader {
   constructor() {
     this.archiveUrlsFile = path.join(__dirname, '..', 'chesscom-archive-urls.pv');
     this.processedUrlsFile = path.join(__dirname, '..', 'chesscom-processed-urls.pv');
     this.errorUrlsFile = path.join(__dirname, '..', 'chesscom-error-urls.pv');
     this.outputDir = path.join(__dirname, '..', 'output');
-    this.outputFileAll = path.join(this.outputDir, 'chesscom-all.pgn');
-    this.outputFileLimited = path.join(this.outputDir, 'chesscom-limited.pgn');
 
-    // 🚀 SYSTÈME DE CHUNKS pour éviter la limite de Set sur 200Go de données
-    this.CHUNK_SIZE = 5000000; // 5M parties par chunk (~400MB RAM)
-    this.hashChunks = []; // Tableau de tous les chunks
-    this.currentChunk = new Set(); // Chunk actuel en cours d'écriture
-    this.hashChunks.push(this.currentChunk); // Ajouter le premier chunk
+    // Générer les noms de fichiers basés sur la configuration
+    const minElo = config.minOnlineElo;
+    const minTime = config.minGameTime;
+    this.outputFileAll = path.join(this.outputDir, `chesscom-${minElo}.pgn`);
+    this.outputFileLimited = path.join(this.outputDir, `chesscom-${minElo}-${minTime}.pgn`);
 
-    this.maxConcurrent = 3; // Nombre max de requêtes en parallèle
+
+    this.CHUNK_SIZE = 5000000;
+    this.hashChunks = [];
+    this.currentChunk = new Set();
+    this.hashChunks.push(this.currentChunk);
+
+    this.maxConcurrent = 3;
     this.stats = {
       totalArchives: 0,
       processedArchives: 0,
@@ -40,7 +48,7 @@ class ChesscomDownloader {
       fs.mkdirSync(this.outputDir, { recursive: true });
     }
 
-    // Créer les fichiers de sortie vides dès le démarrage
+
     this.initializeOutputFiles();
   }
 
@@ -144,7 +152,7 @@ class ChesscomDownloader {
     let urlIndex = 0;
 
     while (urlIndex < urls.length || inProgress.size > 0) {
-      // Lancer nouvelles requêtes jusqu'à maxConcurrent
+
       while (inProgress.size < this.maxConcurrent && urlIndex < urls.length) {
         const url = urls[urlIndex++];
         const promise = this.processArchiveSafe(url);
@@ -157,7 +165,7 @@ class ChesscomDownloader {
         });
       }
 
-      // Attendre qu'au moins une requête se termine
+
       if (inProgress.size > 0) {
         await Promise.race(inProgress);
       }
@@ -168,52 +176,48 @@ class ChesscomDownloader {
    * Génère un hash simple pour détecter les doublons (optimisé pour Chess.com)
    */
   generateGameHash(pgn) {
-    // Vérifier que pgn est une string valide
+
     if (!pgn || typeof pgn !== 'string') {
       return null;
     }
 
-    // ✨ OPTIMISATION: Pour Chess.com, utiliser l'ID du Link qui est unique
     const linkMatch = pgn.match(/\[Link "https:\/\/www\.chess\.com\/game\/live\/(\d+)"\]/);
     if (linkMatch) {
-      // Hash simple et parfait pour Chess.com
+
       return `chesscom-${linkMatch[1]}`;
     }
 
-    // Fallback pour autres sources - hash composite
     const whiteMatch = pgn.match(/\[White "([^"]+)"\]/);
     const blackMatch = pgn.match(/\[Black "([^"]+)"\]/);
     const dateMatch = pgn.match(/\[Date "([^"]+)"\]/);
     const utcTimeMatch = pgn.match(/\[UTCTime "([^"]+)"\]/);
-    const siteMatch = pgn.match(/\[Site "([^"]+)"\]/);
 
     if (!whiteMatch || !blackMatch || !dateMatch || !utcTimeMatch) {
-      return null; // PGN invalide - manque White, Black, Date ou UTCTime
+      return null;
     }
 
-    // Hash basé sur les joueurs, date, heure UTC et site
-    const hashString = `${whiteMatch[1]}-${blackMatch[1]}-${dateMatch[1]}-${utcTimeMatch[1]}-${siteMatch?.[1] || ''}`;
+    const hashString = `${whiteMatch[1]}-${blackMatch[1]}-${dateMatch[1]}-${utcTimeMatch[1]}`;
     return hashString.toLowerCase();
-  }/**
+  }
+
+  /**
    * Vérifie si une partie respecte les critères de filtrage (ALL)
    */
   meetsFilterCriteriaAll(game) {
     try {
-      // Vérifier que game et game.pgn existent
+
       if (!game || !game.pgn || typeof game.pgn !== 'string') {
         return false;
       }
 
       const { pgn } = game;
 
-      // 1. Extraire les ELO des joueurs
       const whiteElo = this.extractElo(pgn, 'WhiteElo');
       const blackElo = this.extractElo(pgn, 'BlackElo');
 
-      // 2. Vérifier ELO ≥2400 pour les deux joueurs
-      if (!whiteElo || !blackElo || whiteElo < 2400 || blackElo < 2400) {
+      if (!whiteElo || !blackElo || whiteElo < config.minOnlineElo || blackElo < config.minOnlineElo) {
         return false;
-      }      // 3. Vérifier profondeur ≥10 ply (compter les coups)
+      }
       const moveCount = this.countMoves(pgn);
       if (moveCount < 10) {
         return false;
@@ -231,14 +235,14 @@ class ChesscomDownloader {
    */
   meetsFilterCriteriaLimited(game) {
     try {
-      // D'abord vérifier les critères ALL
+
       if (!this.meetsFilterCriteriaAll(game)) {
         return false;
       }
 
       const { time_control } = game;
 
-      // Vérifier la cadence (≥180s pour limited)
+
       if (!this.isValidTimeControl(time_control)) {
         return false;
       }
@@ -255,13 +259,13 @@ class ChesscomDownloader {
   isValidTimeControl(timeControl) {
     if (!timeControl) return false;
 
-    // Format: "180" ou "180+2" ou "1/86400" (daily)
+
     if (timeControl.includes('/')) {
-      return false; // Exclure les parties daily
+      return false;
     }
 
     const seconds = parseInt(timeControl.split('+')[0]);
-    return seconds >= 180;
+    return seconds >= config.minGameTime;
   }
 
   /**
@@ -276,7 +280,7 @@ class ChesscomDownloader {
    * Compte le nombre de coups dans une partie
    */
   countMoves(pgn) {
-    // Extraire la section des coups (après les métadonnées)
+
     const lines = pgn.split('\n');
     const moveLines = lines.filter(line =>
       !line.startsWith('[') &&
@@ -285,9 +289,9 @@ class ChesscomDownloader {
     );
 
     const movesText = moveLines.join(' ');
-    // Compter les numéros de coups (1. 2. 3. etc.)
+
     const moveNumbers = movesText.match(/\d+\./g);
-    return moveNumbers ? moveNumbers.length * 2 : 0; // *2 car chaque numéro = 2 ply
+    return moveNumbers ? moveNumbers.length * 2 : 0;
   }
 
   /**
@@ -297,7 +301,7 @@ class ChesscomDownloader {
     try {
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'chessmont-dataset/1.0 (contact: dataset@chessmont.com)'
+          'User-Agent': config.chesscom.userAgent
         }
       });      if (!response.ok) {
         if (response.status === 404) {
@@ -315,25 +319,25 @@ class ChesscomDownloader {
 
       let filteredCountAll = 0;
       let filteredCountLimited = 0;
-        // Traiter chaque partie de l'archive
+
       for (const game of data.games) {
         this.stats.totalGames++;
 
-        // Vérifier que la partie a un PGN valide
+
         if (!game || !game.pgn || typeof game.pgn !== 'string') {
-          continue; // Ignorer les parties sans PGN valide
+          continue;
         }
 
-        // Vérifier les doublons d'abord
+
         const gameHash = this.generateGameHash(game.pgn);
         if (!gameHash) {
-          continue; // PGN invalide
+          continue;
         }        if (this.hasHash(gameHash)) {
           this.stats.duplicateGames++;
-          continue; // Doublon détecté
+          continue;
         }
 
-        // Vérifier filtres ALL (ELO + profondeur)
+
         const passesAll = this.meetsFilterCriteriaAll(game);
         if (passesAll) {
           this.addHash(gameHash);
@@ -341,7 +345,7 @@ class ChesscomDownloader {
           filteredCountAll++;
           this.stats.allGames++;
 
-          // Vérifier aussi LIMITED (+ cadence)
+
           const passesLimited = this.meetsFilterCriteriaLimited(game);
           if (passesLimited) {
             await this.saveGameLimited(game.pgn);
@@ -430,7 +434,7 @@ class ChesscomDownloader {
     }    this.stats.totalArchives = remainingUrls.length;
     console.log(`🎯 ${remainingUrls.length} archives à traiter`);
 
-    // Créer les fichiers de sortie vides si besoin
+
     if (!fs.existsSync(this.outputFileAll)) {
       await fs.promises.writeFile(this.outputFileAll, '', 'utf8');
       console.log(`📁 Fichier créé: ${this.outputFileAll}`);
@@ -439,15 +443,15 @@ class ChesscomDownloader {
       console.log(`📁 Fichier créé: ${this.outputFileLimited}`);
     }
 
-    // ✨ NOUVEAU: Préchargement des hashs existants pour éviter les doublons
+
     await this.preloadExistingHashes();
 
     this.startTime = Date.now();
 
-    // Traitement parallèle des archives
+
     await this.processArchivesConcurrent(remainingUrls);
 
-    // Affichage final de progression
+
     this.showProgress();
 
     const duration = ((Date.now() - this.startTime) / 1000 / 60).toFixed(1);
@@ -457,14 +461,14 @@ class ChesscomDownloader {
     console.log(`⏱️  Durée: ${duration} minutes`);
     console.log(`📊 Archives traitées: ${this.stats.processedArchives}`);
     console.log(`📊 Parties totales: ${this.stats.totalGames}`);
-    console.log(`📊 Parties ALL (ELO≥2400): ${this.stats.allGames}`);
-    console.log(`📊 Parties LIMITED (ELO≥2400 + cadence≥180s): ${this.stats.limitedGames}`);
+    console.log(`📊 Parties ALL (ELO≥${config.minOnlineElo}): ${this.stats.allGames}`);
+    console.log(`📊 Parties LIMITED (ELO≥${config.minOnlineElo} + cadence≥${config.minGameTime}s): ${this.stats.limitedGames}`);
     console.log(`📊 Doublons évités: ${this.stats.duplicateGames}`);
     console.log(`📊 Erreurs: ${this.stats.errors}`);
     console.log(`📁 Fichier ALL: ${this.outputFileAll}`);
     console.log(`📁 Fichier LIMITED: ${this.outputFileLimited}`);
 
-    // Taille des fichiers finaux
+
     try {
       const statsAll = await fs.promises.stat(this.outputFileAll);
       const sizeMBAll = (statsAll.size / 1024 / 1024).toFixed(1);
@@ -484,8 +488,8 @@ class ChesscomDownloader {
   async preloadExistingHashes() {
     console.log('🔄 Préchargement des hashs existants...');
 
-    // ✅ Analyser SEULEMENT le fichier ALL (qui contient toutes les parties)
-    // LIMITED est un sous-ensemble de ALL, donc pas besoin de l'analyser
+
+
     const filePath = this.outputFileAll;
     let totalPreloadedGames = 0;
 
@@ -502,13 +506,13 @@ class ChesscomDownloader {
       const fileSizeMB = (fileStats.size / 1024 / 1024).toFixed(1);
       console.log(`   Taille: ${fileSizeMB} MB`);
 
-      // Si le fichier est vide, on passe
+
       if (fileStats.size === 0) {
         console.log(`   ⚠️  Fichier vide, ignoré`);
         return;
       }
 
-      // Streaming pour lire le fichier ligne par ligne
+
       const readStream = fs.createReadStream(filePath, { encoding: 'utf8' });
       const rl = readline.createInterface({
         input: readStream,
@@ -520,9 +524,9 @@ class ChesscomDownloader {
       let lastUpdate = Date.now();
 
       for await (const line of rl) {
-        // Détecter le début d'une nouvelle partie avec [Event
+
         if (line.startsWith('[Event ')) {
-          // Si on a déjà une partie en cours, la traiter d'abord
+
           if (currentGame.trim() !== '') {
             const gameHash = this.generateGameHash(currentGame);
 
@@ -531,7 +535,7 @@ class ChesscomDownloader {
               gameCount++;
               totalPreloadedGames++;
 
-              // Afficher progression toutes les 3 secondes
+
               const now = Date.now();
               if (now - lastUpdate > 3000) {
                 process.stdout.write(`\r   📊 Parties préchargées: ${gameCount.toLocaleString()}`);
@@ -540,15 +544,15 @@ class ChesscomDownloader {
             }
           }
 
-          // Commencer une nouvelle partie
+
           currentGame = line + '\n';
         } else {
-          // Ajouter la ligne à la partie courante
+
           currentGame += line + '\n';
         }
       }
 
-      // Traiter la dernière partie si nécessaire
+
       if (currentGame.trim() !== '') {
         const gameHash = this.generateGameHash(currentGame);
         if (gameHash && !this.hasHash(gameHash)) {
@@ -578,7 +582,7 @@ class ChesscomDownloader {
    * Vérifie si un hash existe déjà (recherche dans tous les chunks)
    */
   hasHash(hash) {
-    // Vérifier tous les chunks
+
     for (const chunk of this.hashChunks) {
       if (chunk.has(hash)) {
         return true;
@@ -591,13 +595,13 @@ class ChesscomDownloader {
    * Ajoute un hash (avec gestion des chunks)
    */
   addHash(hash) {
-    // Si le chunk actuel est plein, créer un nouveau
+
     if (this.currentChunk.size >= this.CHUNK_SIZE) {
       console.log(`\n💾 Chunk ${this.hashChunks.length} plein (${this.currentChunk.size.toLocaleString()} hashs), création d'un nouveau chunk...`);
       this.currentChunk = new Set();
       this.hashChunks.push(this.currentChunk);
 
-      // Estimation mémoire
+
       const estimatedMemoryMB = this.hashChunks.length * this.CHUNK_SIZE * 80 / 1024 / 1024;
       console.log(`📊 Chunks actifs: ${this.hashChunks.length} (~${estimatedMemoryMB.toFixed(0)} MB RAM)`);
     }
@@ -618,7 +622,7 @@ class ChesscomDownloader {
   getMemoryStats() {
     const totalHashes = this.getTotalHashCount();
     const chunksCount = this.hashChunks.length;
-    const estimatedMemoryMB = Math.round((totalHashes * 80) / (1024 * 1024)); // ~80 bytes per hash
+    const estimatedMemoryMB = Math.round((totalHashes * 80) / (1024 * 1024));
 
     return {
       totalHashes,

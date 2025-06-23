@@ -7,11 +7,15 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Charger la configuration
+const configPath = path.join(__dirname, '..', '..', 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
 class ChesscomLeaderboard {
   constructor() {
     this.baseUrl = 'https://www.chess.com/callback/leaderboard/live?gameType=live';
     this.outputFile = path.join(__dirname, '..', 'chesscomusername.pv');
-    this.targetCount = 10000;
+    this.targetCount = config.chesscom.numberOfUsersInLeaderboard;
   }
 
   /**
@@ -31,7 +35,7 @@ class ChesscomLeaderboard {
         const url = `${this.baseUrl}&page=${page}`;
         const response = await fetch(url, {
           headers: {
-            'User-Agent': 'chessmont-dataset/1.0 (contact: contact@chessmont.com)',
+            'User-Agent': config.chesscom.userAgent,
             'Referer': 'https://www.chess.com/leaderboard/live'
           }
         });
@@ -99,10 +103,10 @@ class ChesscomLeaderboard {
   }
 
   /**
-   * Vérifie si la liste est complète (au moins 9500 usernames)
+   * Vérifie si la liste est complète
    */
   isComplete(usernames) {
-    const minRequired = 9500; // Tolérance pour les comptes supprimés/privés
+    const minRequired = this.targetCount * 0.99; // Tolérance pour les comptes supprimés/privés
     return usernames.length >= minRequired;
   }
 

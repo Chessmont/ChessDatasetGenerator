@@ -4,17 +4,25 @@ import fs from 'fs';
 import path from 'path';
 import { createReadStream, createWriteStream } from 'fs';
 
-// Import de simple-zstd comme dans lichess-processor
+
 import pkg from 'simple-zstd';
 const { ZSTDCompress } = pkg;
 
 class Compressor {
-  constructor() {
-    // 🔧 CONFIGURATION - Modifiez ces valeurs selon vos besoins
-    this.inputFile = './output/chessmont.pgn';  // Fichier à compresser
-    this.outputFile = './output/chessmont.zst';  // Fichier compressé
-    this.compressionLevel = 12;  // Niveau compression (1=rapide, 22=max)
-    this.chunkSize = 64 * 1024 * 1024;  // 64MB par chunk
+  constructor(inputFile) {
+    if (!inputFile) {
+      throw new Error('Fichier d\'entrée requis');
+    }
+
+    this.inputFile = inputFile;
+
+
+
+    this.outputFile = inputFile + '.zst';
+
+
+    this.compressionLevel = 12;
+    this.chunkSize = 64 * 1024 * 1024;
   }
 
   /**
@@ -22,7 +30,7 @@ class Compressor {
    */
   async run() {
     try {
-      console.log('🗜️  COMPRESSION PGN AVEC ZSTD');
+      console.log('🗜️  COMPRESSION AVEC ZSTD');
       console.log('================================');
       console.log(`📁 Input:  ${this.inputFile}`);
       console.log(`📁 Output: ${this.outputFile}`);
@@ -44,7 +52,7 @@ class Compressor {
       throw new Error(`Fichier d'entrée non trouvé: ${this.inputFile}`);
     }
 
-    // Statistiques du fichier d'entrée
+
     const inputStats = fs.statSync(this.inputFile);
     const inputSizeMB = (inputStats.size / (1024 * 1024)).toFixed(2);
     const inputSizeGB = (inputStats.size / (1024 * 1024 * 1024)).toFixed(2);
@@ -55,13 +63,13 @@ class Compressor {
     const startTime = Date.now();
     console.time('⏱️  Compression totale');
 
-    // Supprimer le fichier de sortie s'il existe
+
     if (fs.existsSync(this.outputFile)) {
       fs.unlinkSync(this.outputFile);
     }
 
     return new Promise((resolve, reject) => {
-      // Streams : input -> compress -> output (comme dans lichess-processor)
+
       const inputStream = createReadStream(this.inputFile, {
         highWaterMark: this.chunkSize
       });
@@ -73,16 +81,16 @@ class Compressor {
       let lastLogTime = Date.now();
       const LOG_INTERVAL = 2000;
 
-      // Pipeline de streaming : input -> compress -> output
+
       inputStream
         .pipe(compressStream)
         .pipe(outputStream);
 
-      // Tracking des données lues
+
       inputStream.on('data', (chunk) => {
         totalBytesRead += chunk.length;
 
-        // Afficher le progrès
+
         const now = Date.now();
         if (now - lastLogTime > LOG_INTERVAL) {
           this.showProgress(totalBytesRead, inputStats.size, totalBytesWritten, startTime);
@@ -90,12 +98,12 @@ class Compressor {
         }
       });
 
-      // Tracking des données écrites
+
       outputStream.on('data', (chunk) => {
         totalBytesWritten += chunk.length;
       });
 
-      // Gestion des erreurs
+
       inputStream.on('error', (error) => {
         reject(new Error(`Erreur lecture: ${error.message}`));
       });
@@ -108,12 +116,12 @@ class Compressor {
         reject(new Error(`Erreur écriture: ${error.message}`));
       });
 
-      // Finalisation
+
       outputStream.on('finish', async () => {
         try {
           console.timeEnd('⏱️  Compression totale');
 
-          // Statistiques finales avec taille réelle du fichier de sortie
+
           const outputStats = await fs.promises.stat(this.outputFile);
           this.showFinalStats(inputStats.size, outputStats.size, startTime);
           resolve();
@@ -169,7 +177,7 @@ class Compressor {
     console.log(`⏱️  Temps total: ${this.formatTime(elapsed)}`);
     console.log(`📁 Fichier créé: ${path.basename(this.outputFile)}`);
 
-    // Vérification du fichier
+
     if (fs.existsSync(this.outputFile)) {
       const stats = fs.statSync(this.outputFile);
       console.log(`✅ Vérification: Fichier créé avec succès (${(stats.size / (1024 * 1024)).toFixed(2)} MB)`);
@@ -188,8 +196,44 @@ class Compressor {
   }
 }
 
-// Exécution directe
-const compressor = new Compressor();
-compressor.run();
+
+async function main() {
+
+  const inputFile = process.argv[2];
+
+  if (!inputFile) {
+    console.log('❌ ERREUR: Fichier d\'entrée requis');
+    console.log('');
+    console.log('📖 USAGE:');
+    console.log('  node compress.js <fichier-d-entree>');
+    console.log('');
+    console.log('📝 EXEMPLES:');
+    console.log('  node compress.js ./output/chessmont.pgn');
+    console.log('  node compress.js ./output/lichess-all.pgn');
+    console.log('  node compress.js C:\\path\\to\\file.pgn');
+    console.log('');
+    console.log('💡 Le fichier de sortie sera créé automatiquement avec l\'extension .zst');
+    process.exit(1);
+  }
+
+  try {
+
+    if (!fs.existsSync(inputFile)) {
+      console.log(`❌ ERREUR: Fichier introuvable: ${inputFile}`);
+      process.exit(1);
+    }
+
+    const compressor = new Compressor(inputFile);
+    await compressor.run();
+  } catch (error) {
+    console.error(`❌ ERREUR: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+
+if (process.argv[1] && process.argv[1].endsWith('compress.js')) {
+  main();
+}
 
 export default Compressor;

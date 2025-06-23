@@ -9,9 +9,9 @@ import { Chess } from 'chess.js'
 const remoteFiles = ['a', 'b', 'c', 'd', 'e']
 const remoteBaseURL = 'https://raw.githubusercontent.com/lichess-org/chess-openings/master/'
 
-const localFolder = './scripts/temp'
-const customOpeningsFile = './scripts/input/customOpenings.tsv'
-const outputFile = './scripts/output/openings.tsv'
+const localFolder = './temp'
+const customOpeningsFile = './customOpenings.tsv'
+const outputFile = './openings.tsv'
 
 const downloadFileOnce = (url, dest) =>
   new Promise((resolve, reject) => {

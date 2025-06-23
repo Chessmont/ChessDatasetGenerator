@@ -8,19 +8,14 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
+const configPath = path.join(__dirname, '..', 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
 /**
  * Script de compilation PGN - Réunit plusieurs fichiers PGN en un seul
- * Modifiez les variables ci-dessous selon vos besoins
+ * Usage: node compil.js [--official] <fichier1.pgn> <fichier2.pgn> [fichier3.pgn...]
  */
-
-// 📁 CONFIGURATION - Modifiez selon vos besoins
-const INPUT_FILES = [
-  './scripts/output/twic-pgnmentor.pgn', 
-  './scripts/output/chesscom-2500-180.pgn',
-  './scripts/output/lichess-2500-180.pgn',
-];
-
-const OUTPUT_FILE = './scripts/output/chessmont.pgn';
 
 class PGNCompiler {
   constructor() {
@@ -44,19 +39,19 @@ class PGNCompiler {
     console.log(`📂 Fichiers d'entrée: ${inputFiles.length}`);
     console.log(`📁 Fichier de sortie: ${outputFile}`);
 
-    // Vérifier que les fichiers d'entrée existent
+
     const validFiles = await this.validateInputFiles(inputFiles);
     if (validFiles.length === 0) {
       throw new Error('Aucun fichier valide trouvé');
     }
 
-    // Créer le répertoire de sortie si nécessaire
+
     const outputDir = path.dirname(outputFile);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // Créer le fichier de sortie vide
+
     const writeStream = createWriteStream(outputFile);
 
     try {
@@ -111,6 +106,7 @@ class PGNCompiler {
 
     return validFiles;
   }
+
   /**
    * Traite un fichier et l'ajoute au flux de sortie
    */
@@ -126,24 +122,24 @@ class PGNCompiler {
       readStream.on('data', (chunk) => {
         processedSize += chunk.length;
 
-        // Compter les parties au passage
+
         const gameMatches = chunk.match(/\[Event /g);
         if (gameMatches) {
           gameCount += gameMatches.length;
         }
 
-        // Écrire directement le chunk dans le fichier de sortie (pas de buffer)
+
         writeStream.write(chunk);
 
-        // Afficher le progrès pour les gros fichiers
-        if (processedSize % (10 * 1024 * 1024) === 0) { // Tous les 10MB
+
+        if (processedSize % (10 * 1024 * 1024) === 0) {
           const progress = ((processedSize / fileStats.size) * 100).toFixed(1);
           process.stdout.write(`\r  📈 Progrès: ${progress}% (${gameCount} parties)`);
         }
       });
 
       readStream.on('end', () => {
-        // Ajouter une ligne vide entre les fichiers pour séparer
+
         writeStream.write('\n');
 
         this.stats.totalGames += gameCount;
@@ -164,7 +160,7 @@ class PGNCompiler {
    */
   showProgress() {
     const progress = ((this.stats.processedFiles / this.stats.totalFiles) * 100).toFixed(1);
-    console.log(`📊 Progression: ${progress}% | Parties totales: ${this.stats.totalGames}`);
+    console.log(`📊 Progression: ${progress}% | Parties totales: ${this.stats.totalGames.toLocaleString()}`);
   }
 
   /**
@@ -179,7 +175,7 @@ class PGNCompiler {
       console.log('=========================');
       console.log(`⏱️  Durée: ${duration}s`);
       console.log(`📊 Fichiers traités: ${this.stats.processedFiles}/${this.stats.totalFiles}`);
-      console.log(`📊 Parties totales: ${this.stats.totalGames}`);
+      console.log(`📊 Parties totales: ${this.stats.totalGames.toLocaleString()}`);
       console.log(`📊 Taille finale: ${outputSizeMB} MB`);
       console.log(`📊 Erreurs: ${this.stats.errors}`);
       console.log(`📁 Fichier final: ${outputFile}`);
@@ -191,15 +187,71 @@ class PGNCompiler {
 }
 
 /**
- * Fonction principale
+ * Fonction principale pour l'exécution depuis la ligne de commande
  */
 async function main() {
-  console.log('🚀 COMPILATION PGN CHESSMONT');
-  console.log('============================');
+
+  let args = process.argv.slice(2);
+  let useOfficialName = false;
+
+
+  if (args.includes('--official')) {
+    useOfficialName = true;
+    args = args.filter(arg => arg !== '--official');
+  }
+
+  const inputFiles = args;
+
+  if (inputFiles.length === 0) {
+    console.log('❌ ERREUR: Au moins un fichier PGN requis');
+    console.log('');
+    console.log('📖 USAGE:');
+    console.log('  node compil.js [--official] <fichier1.pgn> <fichier2.pgn> [fichier3.pgn...]');
+    console.log('');
+    console.log('🔧 OPTIONS:');
+    console.log('  --official    Utilise officialPGNFileName au lieu de finalPGNFileName');
+    console.log('');
+    console.log('📝 EXEMPLES:');
+    console.log('  node compil.js ./output/chesscom-2500.pgn ./output/lichess-2500.pgn');
+    console.log('  node compil.js --official ./output/twic.pgn ./output/pgnmentor.pgn');
+    console.log('  node compil.js C:\\path\\to\\file1.pgn C:\\path\\to\\file2.pgn');
+    console.log('');
+    console.log('💡 Tous les fichiers doivent avoir l\'extension .pgn');
+
+    if (useOfficialName) {
+      console.log(`📁 Le fichier de sortie sera: ${config.officialPGNFileName} (mode officiel)`);
+    } else {
+      console.log(`📁 Le fichier de sortie sera: ${config.finalPGNFileName} (mode standard)`);
+    }
+    process.exit(1);
+  }
+
+
+  for (const file of inputFiles) {
+    if (!file.toLowerCase().endsWith('.pgn')) {
+      console.log(`❌ ERREUR: Le fichier doit avoir l'extension .pgn: ${file}`);
+      console.log('💡 Assurez-vous que tous les fichiers sont des fichiers PGN valides');
+      process.exit(1);
+    }
+  }
+
+
+  const outputFileName = useOfficialName ? config.officialPGNFileName : config.finalPGNFileName;
+  const outputFile = path.join(__dirname, 'output', outputFileName);
+
+  console.log('🚀 COMPILATION PGN');
+  console.log('==================');
+  console.log(`🎯 Compilation de ${inputFiles.length} fichier(s) vers: ${outputFileName}`);
+
+  if (useOfficialName) {
+    console.log('🏛️  Mode OFFICIEL activé');
+  } else {
+    console.log('📦 Mode STANDARD');
+  }
 
   try {
     const compiler = new PGNCompiler();
-    await compiler.compile(INPUT_FILES, OUTPUT_FILE);
+    await compiler.compile(inputFiles, outputFile);
 
   } catch (error) {
     console.error(`❌ ERREUR: ${error.message}`);
@@ -207,5 +259,7 @@ async function main() {
   }
 }
 
-// Exécution directe
-main();
+
+if (process.argv[1] && process.argv[1].endsWith('compil.js')) {
+  main();
+}

@@ -87,7 +87,7 @@ class LichessMain {
 
     console.time('Temps total');
 
-    // Initialiser les fichiers de sortie vides
+
     await this.initializeOutputFiles();
 
     const lastAvailable = this.getLastAvailableMonth();
@@ -118,7 +118,7 @@ class LichessMain {
       }
       return false;
     };
-    // Démarrer les 5 premiers téléchargements
+
     let preloadMonth = currentDate;
     for (let i = 0; i < 5; i++) {
       if (startDownloadIfNeeded(preloadMonth)) {
@@ -172,7 +172,7 @@ class LichessMain {
         console.error(`❌ ERREUR CRITIQUE ${currentDate}: ${error.message}`);
         console.error(`❌ ARRÊT DU TRAITEMENT - Corrigez le problème et relancez`);
 
-        // Nettoyer les ressources
+
         if (processData) {
           try {
             await this.processor.deleteFile(processData.pgnPath);
@@ -181,7 +181,7 @@ class LichessMain {
           }
         }
 
-        // Arrêter complètement
+
         throw error;
       }
     }
@@ -208,6 +208,6 @@ class LichessMain {
   }
 }
 
-// Lancement du script
+
 const main = new LichessMain();
 main.run().catch(console.error);

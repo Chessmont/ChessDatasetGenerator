@@ -140,7 +140,6 @@ class ChesscomArchives {
         console.log(`  ⚠️  Aucune archive`);
       }
 
-      // Marquer comme traité
       await this.saveProcessedUser(username);
     }
 

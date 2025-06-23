@@ -1,20 +1,27 @@
 #!/usr/bin/env node
 
-
-
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { Worker } from 'worker_threads';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+
+const configPath = path.join(__dirname, '..', 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 /**
  * Pool de workers pour exécuter les merges K-way en parallèle
  */
-class MergeWorkerPool {  constructor(maxWorkers = 4) {
+class MergeWorkerPool {
+  constructor(maxWorkers = 4) {
     this.maxWorkers = maxWorkers;
     this.activeWorkers = new Set();
     this.queue = [];
-    // Construire le chemin relatif vers le worker
+
     this.workerPath = path.join(process.cwd(), 'lib', 'merge-worker.js');
   }
 
@@ -23,7 +30,7 @@ class MergeWorkerPool {  constructor(maxWorkers = 4) {
    */
   async executeMerge(inputFiles, outputFile, isFirstPhase = false) {
     return new Promise((resolve, reject) => {
-      // Si on a atteint la limite de workers, mettre en queue
+
       if (this.activeWorkers.size >= this.maxWorkers) {
         this.queue.push({ inputFiles, outputFile, isFirstPhase, resolve, reject });
         return;
@@ -37,7 +44,7 @@ class MergeWorkerPool {  constructor(maxWorkers = 4) {
     const worker = new Worker(this.workerPath);
     this.activeWorkers.add(worker);
 
-    // Configurer les handlers du worker
+
     worker.on('message', (result) => {
       this._onWorkerComplete(worker, result, null, resolve, reject);
     });
@@ -46,7 +53,7 @@ class MergeWorkerPool {  constructor(maxWorkers = 4) {
       this._onWorkerComplete(worker, null, error, resolve, reject);
     });
 
-    // Envoyer la tâche au worker
+
     worker.postMessage({
       inputFiles,
       outputFile,
@@ -55,18 +62,18 @@ class MergeWorkerPool {  constructor(maxWorkers = 4) {
   }
 
   _onWorkerComplete(worker, result, error, resolve, reject) {
-    // Nettoyer le worker
+
     this.activeWorkers.delete(worker);
     worker.terminate();
 
-    // Traiter le résultat
+
     if (error) {
       reject(error);
     } else {
       resolve(result);
     }
 
-    // Démarrer le prochain travail en queue
+
     if (this.queue.length > 0) {
       const next = this.queue.shift();
       this._startWorker(next.inputFiles, next.outputFile, next.isFirstPhase, next.resolve, next.reject);
@@ -94,23 +101,30 @@ class MergeWorkerPool {  constructor(maxWorkers = 4) {
   }
 }
 
-class FenProcessor {  constructor() {
-    this.inputFile = './output/chessmont.pgn';
-    this.positionIndexFile = './output/chessmont-pgi.tsv';
-    this.tempDir = './temp';
-    this.outputDir = './output';
+class FenProcessor {
+  constructor() {
+
+    const inputFileName = config.withOnlineGame ? config.finalPGNFileName : config.officialPGNFileName;
+    this.inputFile = path.join(__dirname, 'output', inputFileName);
+
+
+    const baseFileName = inputFileName.replace('.pgn', '');
+    this.positionIndexFile = path.join(__dirname, 'output', `${baseFileName}-pgi.tsv`);
+
+    this.tempDir = path.join(__dirname, '..', 'temp');
+    this.outputDir = path.join(__dirname, 'output');
 
 
     this.numWorkers = os.cpus().length;
     this.batchSize = 16;
     this.maxQueueSize = this.numWorkers * 4;
-    this.chunkSize = 3000000; //!\ DONT INCREASE THIS VALUE - 3M IS THE MAXIMUM FOR A SINGLE CHUNK, YOU CAN REDUCE IT IF YOU WANT SMALLER CHUNKS
+    this.chunkSize = 3000000;
     this.chunkIndex = 0;
     this.positionsInCurrentChunk = 0;
 
     this.chunksPerMerge = 6;
 
-    // Pool de workers pour les merges parallèles
+
     const maxMergeWorkers = os.cpus().length
     this.mergeWorkerPool = new MergeWorkerPool(maxMergeWorkers);
     console.log(`🧵 Pool de merge workers initialisé avec ${maxMergeWorkers} workers`);
@@ -599,7 +613,7 @@ class FenProcessor {  constructor() {
       const nextPhaseFiles = [];
       let mergeIndex = 0;
 
-      // Préparer tous les batchs de merge
+
       const mergeTasks = [];
       for (let i = 0; i < currentFiles.length; i += this.chunksPerMerge) {
         const batch = currentFiles.slice(i, i + this.chunksPerMerge);
@@ -615,7 +629,7 @@ class FenProcessor {  constructor() {
         mergeIndex++;
       }
 
-      console.log(`🧵 Lancement de ${mergeTasks.length} merges en parallèle via workers...`);      // Exécuter tous les merges en parallèle via le pool de workers
+      console.log(`🧵 Lancement de ${mergeTasks.length} merges en parallèle via workers...`);
       const mergePromises = mergeTasks.map(async (task) => {
         const startTime = Date.now();
         const result = await this.mergeWorkerPool.executeMerge(
@@ -624,7 +638,7 @@ class FenProcessor {  constructor() {
           task.isFirstPhase
         );
 
-        // Gérer le résultat du worker
+
         if (!result.success) {
           throw new Error(`Worker merge failed: ${result.error}`);
         }
@@ -636,11 +650,11 @@ class FenProcessor {  constructor() {
         return task.outputFile;
       });
 
-      // Attendre que tous les merges se terminent
+
       const completedFiles = await Promise.all(mergePromises);
       nextPhaseFiles.push(...completedFiles);
 
-      // Nettoyage des fichiers de la phase précédente
+
       if (phaseNumber === 1 && keepSortedFiles) {
         console.log(`   🛡️  Conservation des fichiers _sorted activée - pas de suppression pour cette phase`);
       } else {
@@ -661,7 +675,7 @@ class FenProcessor {  constructor() {
 
     const finalResult = await this.kWayMergeFinal(currentFiles);
 
-    // Nettoyage des fichiers finaux
+
     for (const file of currentFiles) {
       if (fs.existsSync(file)) {
         fs.unlinkSync(file);
@@ -1107,7 +1121,7 @@ class FenProcessor {  constructor() {
       this.cleanupPhaseDirectories();      console.log('\n🛡️  Traitement complet réussi - nettoyage final des fichiers _sorted...');
       this.cleanupSortedFiles();
 
-      // Nettoyage du pool de workers
+
       console.log('🧵 Fermeture du pool de merge workers...');
       await this.mergeWorkerPool.shutdown();
 
@@ -1142,7 +1156,7 @@ class FenProcessor {  constructor() {
       console.error('🛡️  SÉCURITÉ: Aucun nettoyage automatique en cas d\'erreur - vos fichiers temp/ sont préservés');
       console.error('🛡️  Utilisez check-temp-status.js pour diagnostiquer l\'état des fichiers temporaires');
 
-      // Nettoyage d'urgence du pool de workers
+
       try {
         console.log('🧵 Nettoyage d\'urgence du pool de merge workers...');
         await this.mergeWorkerPool.shutdown();
@@ -1410,7 +1424,79 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 
+const args = process.argv.slice(2);
+
+if (args.includes('--help') || args.includes('-h')) {
+  const inputFileName = config.withOnlineGame ? config.finalPGNFileName : config.officialPGNFileName;
+  const outputFileName = inputFileName.replace('.pgn', '-pgi.tsv');
+
+  console.log(`
+♟️  Extracteur de positions FEN
+==============================
+
+Usage: node fen.js [fichier.pgn] [options]
+
+Arguments:
+  fichier.pgn    Fichier PGN source (optionnel)
+                 Par défaut: ${inputFileName}
+
+Options:
+  --help, -h     Affiche cette aide
+  --resume       Mode reprise (reprend où ça s'est arrêté)
+
+Description:
+  Extrait toutes les positions FEN depuis un fichier PGN et les organise
+  en chunks triés pour un accès rapide.
+
+Configuration actuelle:
+  • Mode: ${config.withOnlineGame ? 'COMPLET (avec sources en ligne)' : 'HORS-LIGNE (TWIC + PGN Mentor)'}
+  • Fichier source: ${inputFileName}
+  • Index généré: ${outputFileName}
+
+Fichiers générés:
+  • temp/chunk_*.tmp        (chunks temporaires)
+  • temp/chunk_*_sorted.tmp (chunks triés)
+  • output/${outputFileName}  (index FEN → Game ID)
+
+Performance:
+  • Workers: ${os.cpus().length} (tous les cœurs CPU)
+  • Chunk size: 3M positions max
+  • Streaming: RAM constante même sur gros fichiers
+`);
+  process.exit(0);
+}
+
+
+let customInputFile = null;
+if (args.length > 0 && !args[0].startsWith('--')) {
+  customInputFile = path.resolve(args[0]);
+
+  if (!fs.existsSync(customInputFile)) {
+    console.error(`❌ Erreur: Fichier non trouvé: ${customInputFile}`);
+    process.exit(1);
+  }
+
+  if (!customInputFile.endsWith('.pgn')) {
+    console.error(`❌ Erreur: Le fichier doit avoir l'extension .pgn`);
+    process.exit(1);
+  }
+}
+
+
 const processor = new FenProcessor();
+
+
+if (customInputFile) {
+  processor.inputFile = customInputFile;
+
+
+  const baseFileName = path.basename(customInputFile, '.pgn');
+  processor.positionIndexFile = path.join(processor.outputDir, `${baseFileName}-pgi.tsv`);
+
+  console.log(`📁 Fichier personnalisé: ${customInputFile}`);
+  console.log(`🎯 Index personnalisé: ${processor.positionIndexFile}`);
+}
+
 processor.run().catch((error) => {
   console.error('\n💥 CRASH PRINCIPAL:', error);
   console.error('Stack:', error.stack);

@@ -9,27 +9,50 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ========================================
-// CONFIGURATION - MODIFIEZ ICI LE FICHIER À TRAITER
-// ========================================
-const TARGET_FILE = 'twic-pgnmentor.pgn'; // Fichier compilé à déduplicquer
-// const TARGET_FILE = '/path/complet/vers/votre/fichier.pgn'; // Ou chemin absolu
+/**
+ * Script de déduplication PGN
+ * Usage: node deduplicate-pgn.js <fichier.pgn>
+ */
 
 class PgnDeduplicator {
-  constructor() {
-    this.outputDir = path.join(__dirname, 'output');
+  constructor(inputFile) {
+    if (!inputFile) {
+      throw new Error('Fichier d\'entrée requis');
+    }
 
-    // Système de chunks pour éviter la limite de taille de Set
-    this.CHUNK_SIZE = 5000000; // 5M parties par chunk (~400MB RAM)
-    this.hashChunks = []; // Tableau de tous les chunks
-    this.currentChunk = new Set(); // Chunk actuel en cours d'écriture
-    this.hashChunks.push(this.currentChunk); // Ajouter le premier chunk
-      this.stats = {
+    if (!inputFile.toLowerCase().endsWith('.pgn')) {
+      throw new Error('Le fichier doit avoir l\'extension .pgn');
+    }
+
+    if (!fs.existsSync(inputFile)) {
+      throw new Error(`Le fichier ${inputFile} n'existe pas`);
+    }
+
+    this.inputFile = inputFile;
+    this.outputFile = this.generateOutputFilename(inputFile);
+    this.outputDir = path.join(__dirname, '..', 'output');
+
+
+    this.CHUNK_SIZE = 5000000;
+    this.hashChunks = [];
+    this.currentChunk = new Set();
+    this.hashChunks.push(this.currentChunk);
+
+    this.stats = {
       totalGames: 0,
       uniqueGames: 0,
       duplicateGames: 0
     };
   }
+
+  /**
+   * Génère le nom de fichier de sortie en ajoutant "-deduplicated"
+   */
+  generateOutputFilename(inputFile) {
+    const basename = path.basename(inputFile, '.pgn');
+    return `${basename}-deduplicated.pgn`;
+  }
+
   /**
    * Génère un hash pour une partie (optimisé pour Chess.com)
    */
@@ -38,13 +61,13 @@ class PgnDeduplicator {
       return null;
     }
 
-    // ✨ OPTIMISATION: Pour Chess.com, utiliser l'ID du Link qui est unique
+
     const linkMatch = pgn.match(/\[Link "https:\/\/www\.chess\.com\/game\/live\/(\d+)"\]/);
     if (linkMatch) {
-      // Hash simple et parfait pour Chess.com
+
       return `chesscom-${linkMatch[1]}`;
-    }    // ⚠️ FALLBACK CRITIQUE: Pour Lichess, PGN Mentor, TWIC, fichiers mixtes
-    // Sans ceci, les parties non-Chess.com seraient ignorées = PERTE DE DONNÉES
+    }
+
     const whiteMatch = pgn.match(/\[White "([^"]+)"\]/);
     const blackMatch = pgn.match(/\[Black "([^"]+)"\]/);
     const dateMatch = pgn.match(/\[Date "([^"]+)"\]/);
@@ -54,8 +77,8 @@ class PgnDeduplicator {
       return `unique-${Date.now()}-${Math.random()}`;
     }
 
-    // Hash composite pour déduplication TWIC vs PGN Mentor
-    // Utilise uniquement: Site, Date, White, Black, WhiteElo, BlackElo
+
+
     const hashComponents = [
       siteMatch?.[1] || '',
       dateMatch[1],
@@ -64,7 +87,7 @@ class PgnDeduplicator {
       whiteEloMatch?.[1] || '',
       blackEloMatch?.[1] || ''
     ];
-    
+
     const hashString = hashComponents.join('-');
     return hashString.toLowerCase();
   }
@@ -73,7 +96,7 @@ class PgnDeduplicator {
    * Vérifie si un hash existe déjà (recherche dans tous les chunks)
    */
   hasHash(hash) {
-    // Vérifier tous les chunks
+
     for (const chunk of this.hashChunks) {
       if (chunk.has(hash)) {
         return true;
@@ -86,13 +109,13 @@ class PgnDeduplicator {
    * Ajoute un hash (avec gestion des chunks)
    */
   addHash(hash) {
-    // Si le chunk actuel est plein, créer un nouveau
+
     if (this.currentChunk.size >= this.CHUNK_SIZE) {
       console.log(`\n💾 Chunk ${this.hashChunks.length} plein (${this.currentChunk.size.toLocaleString()} hashs), création d'un nouveau chunk...`);
       this.currentChunk = new Set();
       this.hashChunks.push(this.currentChunk);
 
-      // Estimation mémoire
+
       const estimatedMemoryMB = this.hashChunks.length * this.CHUNK_SIZE * 80 / 1024 / 1024;
       console.log(`📊 Chunks actifs: ${this.hashChunks.length} (~${estimatedMemoryMB.toFixed(0)} MB RAM)`);
     }
@@ -113,7 +136,7 @@ class PgnDeduplicator {
   getMemoryStats() {
     const totalHashes = this.getTotalHashCount();
     const chunksCount = this.hashChunks.length;
-    const estimatedMemoryMB = Math.round((totalHashes * 80) / (1024 * 1024)); // ~80 bytes per hash
+    const estimatedMemoryMB = Math.round((totalHashes * 80) / (1024 * 1024));
 
     return {
       totalHashes,
@@ -148,11 +171,11 @@ class PgnDeduplicator {
       return;
     }
 
-    // Obtenir la taille du fichier pour le suivi de progression
+
     const fileStats = await fs.promises.stat(inputFile);    const fileSizeMB = (fileStats.size / 1024 / 1024).toFixed(1);
     console.log(`📁 Taille du fichier: ${fileSizeMB} MB`);
 
-    // Réinitialiser SEULEMENT les stats pour ce fichier (GARDER les hashs !)
+
     this.stats = {
       totalGames: 0,
       uniqueGames: 0,
@@ -161,11 +184,11 @@ class PgnDeduplicator {
       totalBytes: fileStats.size
     };
 
-    // Créer le fichier temporaire dédupliqué
+
     const tempFile = inputFile + '.temp';
     const writeStream = createWriteStream(tempFile, { encoding: 'utf8' });
 
-    // Créer le stream de lecture
+
     const readStream = createReadStream(inputFile, { encoding: 'utf8' });
     const rl = createInterface({
       input: readStream,
@@ -182,7 +205,7 @@ class PgnDeduplicator {
       lineCount++;
       this.stats.processedBytes += Buffer.byteLength(line + '\n', 'utf8');
 
-      // Afficher progression toutes les 2 secondes
+
       const now = Date.now();
       if (now - lastProgressUpdate > 2000) {
         const progress = ((this.stats.processedBytes / this.stats.totalBytes) * 100).toFixed(1);
@@ -191,9 +214,9 @@ class PgnDeduplicator {
         lastProgressUpdate = now;
       }
 
-      // ✨ NOUVEAU: Détecter le début d'une nouvelle partie avec [Event
+
       if (line.startsWith('[Event ')) {
-        // Si on a déjà une partie en cours, la traiter d'abord
+
         if (currentGame.trim() !== '') {
           this.stats.totalGames++;
 
@@ -201,28 +224,28 @@ class PgnDeduplicator {
 
           if (gameHash) {
             if (this.hasHash(gameHash)) {
-              // Doublon détecté
+
               this.stats.duplicateGames++;
             } else {
-              // Nouvelle partie unique
+
               this.addHash(gameHash);
               this.stats.uniqueGames++;
 
-              // Écrire dans le fichier temporaire
+
               writeStream.write(currentGame + '\n\n');
             }
           }
         }
 
-        // Commencer une nouvelle partie
+
         currentGame = line + '\n';
       } else {
-        // Ajouter la ligne à la partie courante
+
         currentGame += line + '\n';
       }
     }
 
-    // Traiter la dernière partie
+
     if (currentGame.trim() !== '') {
       this.stats.totalGames++;      const gameHash = this.generateGameHash(currentGame);
 
@@ -237,10 +260,10 @@ class PgnDeduplicator {
       }
     }
 
-    // Fermer le stream d'écriture
+
     writeStream.end();
 
-    // Attendre que l'écriture soit terminée
+
     await new Promise((resolve, reject) => {
       writeStream.on('finish', resolve);
       writeStream.on('error', reject);
@@ -248,9 +271,9 @@ class PgnDeduplicator {
 
     console.log('\n💾 Sauvegarde du fichier dédupliqué...');
 
-    // Backup de l'ancien fichier
+
     const backupFile = inputFile + '.backup';
-    await fs.promises.rename(inputFile, backupFile);    // Remplacer par le nouveau
+    await fs.promises.rename(inputFile, backupFile);
     await fs.promises.rename(tempFile, inputFile);
 
     console.log('\n✅ DÉDUPLICATION TERMINÉE !');
@@ -263,13 +286,13 @@ class PgnDeduplicator {
       console.log(`📊 Taux de doublons: ${((this.stats.duplicateGames / this.stats.totalGames) * 100).toFixed(2)}%`);
     }
 
-    // Statistiques mémoire
+
     const memoryStats = this.getMemoryStats();
     console.log(`📊 Chunks mémoire utilisés: ${memoryStats.chunksCount}`);
     console.log(`📊 Hashs stockés: ${memoryStats.totalHashes.toLocaleString()}`);
     console.log(`📊 Mémoire estimée: ${memoryStats.estimatedMemoryMB} MB`);
 
-    // Taille des fichiers
+
     try {
       const originalStats = await fs.promises.stat(backupFile);
       const newStats = await fs.promises.stat(inputFile);
@@ -289,55 +312,75 @@ class PgnDeduplicator {
     console.log(`📁 Backup sauvé: ${backupFile}`);
     console.log('💡 Tu peux supprimer le backup si tout est OK');
 
-    // Libérer la mémoire
+
     this.clearAllHashes();
   }
 }
 
-// Fonction principale
-async function main() {
-  console.log('🧹 SCRIPT DE DÉDUPLICATION PGN STREAMING');
-  console.log('=========================================');
-  console.log('✨ Détection robuste par [Event (comme les autres scripts)');
+function showHelp() {
+  console.log(`
+🧹 Script de Déduplication PGN
+╭─────────────────────────────────────────────────────────────╮
+│ Supprime les parties en double d'un fichier PGN            │
+╰─────────────────────────────────────────────────────────────╯
 
-  const deduplicator = new PgnDeduplicator();
+Usage:
+  node deduplicate-pgn.js <fichier.pgn>
 
-  // Déterminer le chemin complet du fichier depuis TARGET_FILE
-  let filePath;
-  if (path.isAbsolute(TARGET_FILE)) {
-    filePath = TARGET_FILE;
-  } else {
-    // Chercher d'abord dans le dossier output
-    const outputPath = path.join(deduplicator.outputDir, TARGET_FILE);
-    if (fs.existsSync(outputPath)) {
-      filePath = outputPath;
-    } else {
-      // Sinon utiliser le chemin relatif
-      filePath = path.resolve(TARGET_FILE);
-    }
-  }
+Arguments:
+  fichier.pgn     Le fichier PGN à déduplicquer
 
-  console.log(`🎯 Fichier cible: ${filePath}`);
+Exemples:
+  node deduplicate-pgn.js output/twic.pgn
+  node deduplicate-pgn.js final-dataset.pgn
 
-  if (!fs.existsSync(filePath)) {
-    console.log(`❌ Fichier introuvable: ${filePath}`);
-    console.log('');
-    console.log('💡 Modifiez la constante TARGET_FILE en haut du script');
-    console.log(`💡 Actuellement: TARGET_FILE = '${TARGET_FILE}'`);
-    process.exit(1);
-  }
-
-  // Démarrer la déduplication
-  const startTime = Date.now();
-  await deduplicator.deduplicateFile(filePath);
-  const endTime = Date.now();
-
-  const durationSeconds = ((endTime - startTime) / 1000).toFixed(1);
-  console.log(`⏰ Durée totale: ${durationSeconds} secondes`);
-  console.log('🏆 DÉDUPLICATION TERMINÉE AVEC SUCCÈS !');
+Le fichier de sortie sera créé avec le suffixe "-deduplicated".
+Exemple: "twic.pgn" → "twic-deduplicated.pgn"
+`);
 }
 
-// Gestion des erreurs
+
+async function main() {
+  try {
+    const args = process.argv.slice(2);
+
+
+    if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+      showHelp();
+      return;
+    }
+
+    if (args.length !== 1) {
+      console.error('❌ Erreur: Un seul fichier PGN doit être spécifié');
+      showHelp();
+      process.exit(1);
+    }
+
+    const inputFile = args[0];
+
+    console.log('🧹 SCRIPT DE DÉDUPLICATION PGN STREAMING');
+    console.log('=========================================');
+    console.log('✨ Détection robuste par [Event]');
+    console.log(`🎯 Fichier d'entrée: ${inputFile}`);
+
+    const deduplicator = new PgnDeduplicator(inputFile);
+
+
+    const startTime = Date.now();
+    await deduplicator.deduplicateFile(inputFile);
+    const endTime = Date.now();
+
+    const durationSeconds = ((endTime - startTime) / 1000).toFixed(1);
+    console.log(`⏰ Durée totale: ${durationSeconds} secondes`);
+    console.log('🏆 DÉDUPLICATION TERMINÉE AVEC SUCCÈS !');
+
+  } catch (error) {
+    console.error(`❌ Erreur: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+
 process.on('uncaughtException', (error) => {
   console.error('\n❌ ERREUR FATALE:', error.message);
   process.exit(1);
@@ -348,7 +391,7 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Lancer le script
+
 main().catch(error => {
   console.error('❌ ERREUR:', error.message);
   process.exit(1);

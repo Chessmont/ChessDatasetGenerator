@@ -8,17 +8,30 @@ import pkg from 'simple-zstd';
 const { ZSTDDecompress } = pkg;
 import { fileURLToPath } from 'url';
 import WorkerPool from './worker-pool.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Charger la configuration
+const configPath = path.join(__dirname, '..', '..', 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
 const workerScript = path.join(__dirname, 'filter-worker.js');
 
-class LichessProcessor {  constructor() {
+class LichessProcessor {
+  constructor() {
     this.baseUrl = 'https://database.lichess.org/standard/';
-    this.outputDir = './scripts/output';
-    this.outputFileAll = path.join(this.outputDir, 'lichess-all.pgn');
-    this.outputFileLimited = path.join(this.outputDir, 'lichess-limited.pgn');
-    this.outputFileEval = path.join(this.outputDir, 'lichess-eval.pgn');
-    this.tempDir = './scripts/temp';
+    this.outputDir = path.join(__dirname, '..', 'output');
+    
+    // Génération automatique des noms de fichiers basés sur la configuration
+    const minElo = config.minOnlineElo;
+    const minTime = config.minGameTime;
+    
+    this.outputFileAll = path.join(this.outputDir, `lichess-${minElo}.pgn`);
+    this.outputFileLimited = path.join(this.outputDir, `lichess-${minElo}-${minTime}.pgn`);
+    this.outputFileEval = path.join(this.outputDir, `lichess-eval.pgn`);
+    
+    this.tempDir = path.join(__dirname, '..', 'temp');
     this.ensureDirectories();
   }  ensureDirectories() {
     [this.outputDir, this.tempDir].forEach(dir => {

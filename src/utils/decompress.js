@@ -4,16 +4,27 @@ import fs from 'fs';
 import path from 'path';
 import { createReadStream, createWriteStream } from 'fs';
 
-// Import de simple-zstd comme dans lichess-processor
+
 import pkg from 'simple-zstd';
 const { ZSTDDecompress } = pkg;
 
 class Decompressor {
-  constructor() {
-    // 🔧 CONFIGURATION - Modifiez ces valeurs selon vos besoins
-    this.inputFile = './scripts/output/pgnmentor.zst';  // Fichier à décompresser
-    this.outputFile = './scripts/output/pgnmentor.pgn';  // Fichier décompressé
-    this.chunkSize = 64 * 1024 * 1024;  // 64MB par chunk
+  constructor(inputFile) {
+    if (!inputFile) {
+      throw new Error('Fichier d\'entrée requis');
+    }
+
+    this.inputFile = inputFile;
+
+
+
+    if (!inputFile.endsWith('.zst')) {
+      throw new Error('Le fichier d\'entrée doit avoir l\'extension .zst');
+    }
+    this.outputFile = inputFile.slice(0, -4);
+
+
+    this.chunkSize = 64 * 1024 * 1024;
   }
 
   /**
@@ -43,7 +54,7 @@ class Decompressor {
       throw new Error(`Fichier d'entrée non trouvé: ${this.inputFile}`);
     }
 
-    // Statistiques du fichier d'entrée
+
     const inputStats = fs.statSync(this.inputFile);
     const inputSizeMB = (inputStats.size / (1024 * 1024)).toFixed(2);
     const inputSizeGB = (inputStats.size / (1024 * 1024 * 1024)).toFixed(2);
@@ -54,13 +65,13 @@ class Decompressor {
     const startTime = Date.now();
     console.time('⏱️  Décompression totale');
 
-    // Supprimer le fichier de sortie s'il existe
+
     if (fs.existsSync(this.outputFile)) {
       fs.unlinkSync(this.outputFile);
     }
 
     return new Promise((resolve, reject) => {
-      // Streams : input -> decompress -> output (comme dans lichess-processor)
+
       const inputStream = createReadStream(this.inputFile, {
         highWaterMark: this.chunkSize
       });
@@ -72,16 +83,16 @@ class Decompressor {
       let lastLogTime = Date.now();
       const LOG_INTERVAL = 2000;
 
-      // Pipeline de streaming : input -> decompress -> output
+
       inputStream
         .pipe(decompressStream)
         .pipe(outputStream);
 
-      // Tracking des données lues (fichier compressé)
+
       inputStream.on('data', (chunk) => {
         totalBytesRead += chunk.length;
 
-        // Afficher le progrès
+
         const now = Date.now();
         if (now - lastLogTime > LOG_INTERVAL) {
           this.showProgress(totalBytesRead, inputStats.size, totalBytesWritten, startTime);
@@ -89,12 +100,12 @@ class Decompressor {
         }
       });
 
-      // Tracking des données écrites (fichier décompressé)
+
       outputStream.on('data', (chunk) => {
         totalBytesWritten += chunk.length;
       });
 
-      // Gestion des erreurs
+
       inputStream.on('error', (error) => {
         reject(new Error(`Erreur lecture: ${error.message}`));
       });
@@ -107,12 +118,12 @@ class Decompressor {
         reject(new Error(`Erreur écriture: ${error.message}`));
       });
 
-      // Finalisation
+
       outputStream.on('finish', async () => {
         try {
           console.timeEnd('⏱️  Décompression totale');
 
-          // Statistiques finales avec taille réelle du fichier de sortie
+
           const outputStats = await fs.promises.stat(this.outputFile);
           this.showFinalStats(inputStats.size, outputStats.size, startTime);
           resolve();
@@ -169,12 +180,12 @@ class Decompressor {
     console.log(`⏱️  Temps total: ${this.formatTime(elapsed)}`);
     console.log(`📁 Fichier créé: ${path.basename(this.outputFile)}`);
 
-    // Vérification du fichier
+
     if (fs.existsSync(this.outputFile)) {
       const stats = fs.statSync(this.outputFile);
       console.log(`✅ Vérification: Fichier créé avec succès (${(stats.size / (1024 * 1024)).toFixed(2)} MB)`);
-      
-      // Calcul du facteur d'expansion
+
+
       const expansionFactor = (stats.size / inputSize).toFixed(1);
       console.log(`📈 Facteur d'expansion: ${expansionFactor}x`);
     } else {
@@ -193,8 +204,51 @@ class Decompressor {
   }
 }
 
-// Exécution directe
-const decompressor = new Decompressor();
-decompressor.run();
+
+async function main() {
+
+  const inputFile = process.argv[2];
+
+  if (!inputFile) {
+    console.log('❌ ERREUR: Fichier d\'entrée requis');
+    console.log('');
+    console.log('📖 USAGE:');
+    console.log('  node decompress.js <fichier-compresse.zst>');
+    console.log('');
+    console.log('📝 EXEMPLES:');
+    console.log('  node decompress.js ./output/chessmont.pgn.zst');
+    console.log('  node decompress.js ./output/lichess-all.pgn.zst');
+    console.log('  node decompress.js C:\\path\\to\\file.tsv.zst');
+    console.log('');
+    console.log('💡 Le fichier de sortie sera créé automatiquement en retirant l\'extension .zst');
+    process.exit(1);
+  }
+
+  try {
+
+    if (!fs.existsSync(inputFile)) {
+      console.log(`❌ ERREUR: Fichier introuvable: ${inputFile}`);
+      process.exit(1);
+    }
+
+
+    if (!inputFile.endsWith('.zst')) {
+      console.log(`❌ ERREUR: Le fichier doit avoir l'extension .zst: ${inputFile}`);
+      console.log('💡 Assurez-vous de spécifier un fichier compressé avec ZSTD');
+      process.exit(1);
+    }
+
+    const decompressor = new Decompressor(inputFile);
+    await decompressor.run();
+  } catch (error) {
+    console.error(`❌ ERREUR: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+
+if (process.argv[1] && process.argv[1].endsWith('decompress.js')) {
+  main();
+}
 
 export default Decompressor;
