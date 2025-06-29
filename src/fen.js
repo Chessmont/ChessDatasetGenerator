@@ -111,7 +111,7 @@ class FenProcessor {
     const baseFileName = inputFileName.replace('.pgn', '');
     this.positionIndexFile = path.join(__dirname, 'output', `${baseFileName}-pgi.tsv`);
 
-    this.tempDir = path.join(__dirname, '..', 'temp');
+    this.tempDir = path.join(__dirname, '..', 'src/temp');
     this.outputDir = path.join(__dirname, 'output');
 
 
@@ -601,7 +601,11 @@ class FenProcessor {
     let currentFiles = [...sortedFiles];
     let phaseNumber = 1;
 
-    while (currentFiles.length > this.chunksPerMerge) {
+    // FORCER LA PHASE 1 pour convertir le format fen|result vers fen\toccurrence\twhite\tblack\tdraw
+    // même si on a peu de fichiers
+    const mustRunPhase1 = true;
+
+    while (currentFiles.length > this.chunksPerMerge || (phaseNumber === 1 && mustRunPhase1)) {
       console.log(`\n🔄 === PHASE ${phaseNumber} ===`);
       console.log(`📂 Input: ${currentFiles.length} chunks`);
 
