@@ -22,15 +22,15 @@ class LichessProcessor {
   constructor() {
     this.baseUrl = 'https://database.lichess.org/standard/';
     this.outputDir = path.join(__dirname, '..', 'output');
-    
+
     // Génération automatique des noms de fichiers basés sur la configuration
     const minElo = config.minOnlineElo;
     const minTime = config.minGameTime;
-    
+
     this.outputFileAll = path.join(this.outputDir, `lichess-${minElo}.pgn`);
     this.outputFileLimited = path.join(this.outputDir, `lichess-${minElo}-${minTime}.pgn`);
     this.outputFileEval = path.join(this.outputDir, `lichess-eval.pgn`);
-    
+
     this.tempDir = path.join(__dirname, '..', 'temp');
     this.ensureDirectories();
   }  ensureDirectories() {
