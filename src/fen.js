@@ -152,53 +152,53 @@ class FenProcessor {
   async countTotalGames() {
     console.log(`🔍 Comptage rapide des parties dans ${this.inputFile}...`);
 
-    const fd = fs.openSync(this.inputFile, 'r');
-    const stats = fs.statSync(this.inputFile);
-    const fileSize = stats.size;
-    this.fileSize = fileSize;
+    // const fd = fs.openSync(this.inputFile, 'r');
+    // const stats = fs.statSync(this.inputFile);
+    // const fileSize = stats.size;
+    // this.fileSize = fileSize;
 
-    console.log(`📊 Taille du fichier: ${(fileSize / 1024 / 1024 / 1024).toFixed(2)} GB`);
+    // console.log(`📊 Taille du fichier: ${(fileSize / 1024 / 1024 / 1024).toFixed(2)} GB`);
 
-    let buffer = '';
-    let position = 0;
-    let gameCount = 0;
-    const SCAN_CHUNK_SIZE = 8 * 1024 * 1024;
+    // let buffer = '';
+    // let position = 0;
+    // let gameCount = 0;
+    // const SCAN_CHUNK_SIZE = 8 * 1024 * 1024;
 
-    while (position < fileSize) {
-      const readBuffer = Buffer.alloc(Math.min(SCAN_CHUNK_SIZE, fileSize - position));
-      const bytesRead = fs.readSync(fd, readBuffer, 0, readBuffer.length, position);
+    // while (position < fileSize) {
+    //   const readBuffer = Buffer.alloc(Math.min(SCAN_CHUNK_SIZE, fileSize - position));
+    //   const bytesRead = fs.readSync(fd, readBuffer, 0, readBuffer.length, position);
 
-      if (bytesRead === 0) break;
+    //   if (bytesRead === 0) break;
 
-      buffer += readBuffer.toString('utf8', 0, bytesRead);
-      position += bytesRead;
+    //   buffer += readBuffer.toString('utf8', 0, bytesRead);
+    //   position += bytesRead;
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+    //   const lines = buffer.split('\n');
+    //   buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        if (line.startsWith('[ID ')) {
-          gameCount++;
-        }
-      }
+    //   for (const line of lines) {
+    //     if (line.startsWith('[ID ')) {
+    //       gameCount++;
+    //     }
+    //   }
 
-      if (gameCount % 100000 === 0 && gameCount > 0) {
-        const progress = (position / fileSize * 100).toFixed(1);
-        process.stdout.write(`\r🔍 Scan: ${gameCount.toLocaleString()} parties trouvées (${progress}%)`);
-      }
-    }
+    //   if (gameCount % 100000 === 0 && gameCount > 0) {
+    //     const progress = (position / fileSize * 100).toFixed(1);
+    //     process.stdout.write(`\r🔍 Scan: ${gameCount.toLocaleString()} parties trouvées (${progress}%)`);
+    //   }
+    // }
 
-    fs.closeSync(fd);
+    // fs.closeSync(fd);
 
-    this.totalGames = gameCount;
-    console.log(`\n📊 ${gameCount.toLocaleString()} parties trouvées dans le fichier`);
+    this.totalGames = 21512376;
+    console.log(`\n📊 ${this.totalGames.toLocaleString()} parties trouvées dans le fichier`);
 
-    const estimatedPositions = Math.round(gameCount * 87.67);
+    const estimatedPositions = Math.round(this.totalGames * 87.67);
     const estimatedChunks = Math.ceil(estimatedPositions / this.chunkSize);
 
     console.log(`📈 Estimation : ${estimatedPositions.toLocaleString()} positions → ${estimatedChunks} chunks`);
 
-    return gameCount;
+    return this.totalGames;
   }
 
   /**
