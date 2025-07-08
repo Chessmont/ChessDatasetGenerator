@@ -567,7 +567,7 @@ class FenProcessor {
 
     const sortedFiles = [];
 
-    for (let i = 0; i < chunkFiles.length; i += this.numWorkers) {
+    for (let i = 0; i < chunkFiles.length; i += Math.min(this.numWorkers, 32)) {
       const batch = chunkFiles.slice(i, i + this.numWorkers);
       const batchResults = await Promise.all(
         batch.map(chunkFile => this.processSingleChunk(chunkFile))
