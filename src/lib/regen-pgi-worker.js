@@ -69,33 +69,39 @@ const processGame = (game, pgn) => {
 
   try {
     const chess = new Chess()
-    const moves = pgn.match(/\d+\.\s*([^\s]+)(?:\s+([^\s]+))?/g) || []
+    chess.loadPgn(pgn)
+    const history = chess.history({ verbose: true })
 
-    for (const moveText of moves) {
-      const parts = moveText.match(/\d+\.\s*([^\s]+)(?:\s+([^\s]+))?/)
-      if (!parts) continue
+    const replayChess = new Chess()
 
-      for (let i = 1; i <= 2; i++) {
-        const move = parts[i]
-        if (!move || move === '1-0' || move === '0-1' || move === '1/2-1/2') break
+    for (let i = 0; i < history.length; i++) {
+      const currentFen = replayChess.fen()
+      const normalizedFen = normalizeFen(currentFen)
+      const hashFen = cityHash64(normalizedFen)
 
-        try {
-          chess.move(move)
-          const fen = normalizeFen(chess.fen())
-          const hashFen = cityHash64(fen)
+      positions.push({
+        hashFen: hashFen.toString(),
+        fen: normalizedFen,
+        gameId: game.id,
+        whiteElo: game.whiteElo,
+        official,
+        date: game.date
+      })
 
-          positions.push({
-            hashFen: hashFen.toString(),
-            fen,
-            gameId: game.id,
-            whiteElo: game.whiteElo,
-            official,
-            date: game.date
-          })
-        } catch (e) {
-        }
-      }
+      replayChess.move(history[i].san)
     }
+
+    const finalFen = replayChess.fen()
+    const normalizedFinalFen = normalizeFen(finalFen)
+    const hashFinalFen = cityHash64(normalizedFinalFen)
+    positions.push({
+      hashFen: hashFinalFen.toString(),
+      fen: normalizedFinalFen,
+      gameId: game.id,
+      whiteElo: game.whiteElo,
+      official,
+      date: game.date
+    })
   } catch (error) {
   }
 
