@@ -13,7 +13,7 @@ class TSVGenerator {
   constructor() {
     this.pgnFile = './output/chessmont.pgn'
     this.inputFensFile = './output/fens-all.tsv'
-    this.outputPgiFile = './output/chesscom-all-pgi-v2.tsv'
+    this.outputPgiFile = './output/chessmont-pgi-v2.tsv'
     this.outputFensFile = './output/fens-all-v2.tsv'
 
     this.pgiStream = null
