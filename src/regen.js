@@ -11,7 +11,7 @@ const __dirname = dirname(__filename)
 
 class TSVGenerator {
   constructor() {
-    this.pgnFile = './scripts/data/chessmont.pgn'
+    this.pgnFile = './src/output/chessmont.pgn'
     this.inputFensFile = './src/output/fens-all.tsv'
     this.outputPgiFile = './src/output/all-pgi-v2.tsv'
     this.outputFensFile = './src/output/fens-all-v2.tsv'
