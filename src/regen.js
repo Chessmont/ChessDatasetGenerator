@@ -106,7 +106,7 @@ class TSVGenerator {
 
   async processPgiBatch(pgnLines, batchId) {
     const result = await this.pgiWorkerPool.execute({ pgnLines, batchId })
-    
+
     for (const pos of result.positions) {
       this.pgiStream.write(`${pos.hashFen}\t${pos.fen}\t${pos.gameId}\t${pos.whiteElo}\t${pos.official}\t${pos.date}\n`)
     }
@@ -175,7 +175,7 @@ class TSVGenerator {
 
   async processFensBatch(lines, batchId, outputStream) {
     const result = await this.fensWorkerPool.execute({ lines, batchId })
-    
+
     for (const line of result.lines) {
       outputStream.write(line + '\n')
     }
