@@ -11,10 +11,10 @@ const __dirname = dirname(__filename)
 
 class TSVGenerator {
   constructor() {
-    this.pgnFile = './src/output/chessmont.pgn'
-    this.inputFensFile = './src/output/fens-all.tsv'
-    this.outputPgiFile = './src/output/chesscom-all-pgi-v2.tsv'
-    this.outputFensFile = './src/output/fens-all-v2.tsv'
+    this.pgnFile = './output/chessmont.pgn'
+    this.inputFensFile = './output/fens-all.tsv'
+    this.outputPgiFile = './output/chesscom-all-pgi-v2.tsv'
+    this.outputFensFile = './output/fens-all-v2.tsv'
 
     this.pgiStream = null
     this.processedGames = 0
