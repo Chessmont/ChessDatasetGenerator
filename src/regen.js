@@ -11,10 +11,10 @@ const __dirname = dirname(__filename)
 
 class TSVGenerator {
   constructor() {
-    this.pgnFile = './output/chessmont.pgn'
-    this.inputFensFile = './output/fens-all.tsv'
-    this.outputPgiFile = './output/chessmont-pgi-v2.tsv'
-    this.outputFensFile = './output/fens-all-v2.tsv'
+    this.pgnFile = './scripts/data/chessmont.pgn'
+    this.inputFensFile = './src/output/fens-all.tsv'
+    this.outputPgiFile = './src/output/all-pgi-v2.tsv'
+    this.outputFensFile = './src/output/fens-all-v2.tsv'
 
     this.pgiStream = null
     this.processedGames = 0
@@ -106,7 +106,7 @@ class TSVGenerator {
 
   async processPgiBatch(pgnLines, batchId) {
     const result = await this.pgiWorkerPool.execute({ pgnLines, batchId })
-
+    
     for (const pos of result.positions) {
       this.pgiStream.write(`${pos.hashFen}\t${pos.fen}\t${pos.gameId}\t${pos.whiteElo}\t${pos.official}\t${pos.date}\n`)
     }
@@ -114,7 +114,7 @@ class TSVGenerator {
     this.processedGames += result.processedGames
     this.totalPositions += result.positions.length
 
-    if (this.processedGames % 10000 === 0) {
+    if (this.processedGames % 1000 === 0) {
       this.updateProgressLog(this.processedGames, this.totalGames, 'parties')
     }
   }
@@ -175,12 +175,17 @@ class TSVGenerator {
 
   async processFensBatch(lines, batchId, outputStream) {
     const result = await this.fensWorkerPool.execute({ lines, batchId })
-
+    
     for (const line of result.lines) {
       outputStream.write(line + '\n')
     }
 
-    return { lineCount: result.lines.length }
+    const lineCount = result.lines.length
+    if (lineCount > 0 && lineCount % 100000 === 0) {
+      process.stdout.write(`\r🔄 Fens: ${lineCount.toLocaleString()} lignes traitées`)
+    }
+
+    return { lineCount }
   }
 
   updateProgressLog(processed, total, type) {
