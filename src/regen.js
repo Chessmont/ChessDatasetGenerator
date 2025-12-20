@@ -64,7 +64,7 @@ class TSVGenerator {
     this.pgiStream = fs.createWriteStream(this.outputPgiFile)
     this.pgiStream.write('hashFen\tfen\tgameId\twhiteElo\tofficial\tdate\n')
 
-    const stream = fs.createReadStream(this.pgnFile, { 
+    const stream = fs.createReadStream(this.pgnFile, {
       encoding: 'utf8',
       highWaterMark: 1024 * 1024
     })

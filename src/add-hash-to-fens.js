@@ -16,11 +16,11 @@ class HashFensGenerator {
     this.outputFile = './src/output/fens-all-v2.tsv'
     this.outputStream = null
     this.workerPool = null
-    
+
     this.numWorkers = os.cpus().length
     this.batchSize = 1000
     this.maxQueueSize = this.numWorkers * 4
-    
+
     this.processedLines = 0
     this.startTime = null
     this.lastLogTime = 0
@@ -59,7 +59,7 @@ class HashFensGenerator {
     console.time('⏱️  Hash FENs')
 
     this.workerPool = new WorkerPool(join(__dirname, 'lib', 'hash-fens-worker.js'))
-    const inputStream = fs.createReadStream(this.inputFile, { 
+    const inputStream = fs.createReadStream(this.inputFile, {
       encoding: 'utf8',
       highWaterMark: 1024 * 1024
     })
@@ -76,7 +76,7 @@ class HashFensGenerator {
       if (batchQueue.length === 0) return
 
       const batch = batchQueue.shift()
-      
+
       if (streamPaused && batchQueue.length < this.maxQueueSize / 2) {
         streamPaused = false
         inputStream.resume()
@@ -107,7 +107,7 @@ class HashFensGenerator {
       if (batchLines.length >= this.batchSize) {
         const batch = { id: batchId++, lines: [...batchLines] }
         batchLines.length = 0
-        
+
         batchQueue.push(batch)
 
         if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
