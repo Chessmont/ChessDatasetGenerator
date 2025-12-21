@@ -517,9 +517,9 @@ class FenProcessor {
 
 
           lines.sort((a, b) => {
-            const fenA = a.split('|')[0];
-            const fenB = b.split('|')[0];
-            return fenA.localeCompare(fenB);
+            const hashA = BigInt(a.split('|')[0]);
+            const hashB = BigInt(b.split('|')[0]);
+            return hashA < hashB ? -1 : hashA > hashB ? 1 : 0;
           });
           const writeStream = fs.createWriteStream(sortedFile, { encoding: 'utf8' });
 
@@ -545,7 +545,7 @@ class FenProcessor {
   }
 
   /**
-   * Traite tous les chunks en parallèle pour les trier
+   * Traite tous les chunks en parallèle pour les trier avec système de queue
    */
   async processAllChunks() {
     console.log(`\n🔄 Tri des chunks...`);
@@ -566,26 +566,60 @@ class FenProcessor {
     console.log(`📂 ${chunkFiles.length} chunks trouvés`);
 
     const sortedFiles = [];
+    const chunkQueue = [...chunkFiles];
+    const workerStates = new Array(Math.min(this.numWorkers, 32)).fill(true);
+    let activeTasks = 0;
+    let completedChunks = 0;
+    let isComplete = false;
 
-    for (let i = 0; i < chunkFiles.length; i += Math.min(this.numWorkers, 32)) {
-      const batch = chunkFiles.slice(i, i + Math.min(this.numWorkers, 32));
-      const batchResults = await Promise.all(
-        batch.map(chunkFile => this.processSingleChunk(chunkFile))
-      );
-      sortedFiles.push(...batchResults);
+    return new Promise((resolve, reject) => {
+      const processNextChunk = () => {
+        const availableWorkerIndex = workerStates.findIndex(state => state === true);
 
-      if (global.gc) {
-        global.gc();
-        console.log(`   🧹 GC forcé après batch ${Math.floor(i / this.numWorkers) + 1}/${Math.ceil(chunkFiles.length / this.numWorkers)}`);
+        if (availableWorkerIndex === -1 || chunkQueue.length === 0) {
+          if (chunkQueue.length === 0 && activeTasks === 0 && !isComplete) {
+            isComplete = true;
+            console.log();
+            console.timeEnd('⏱️  Tri des chunks');
+            console.log(`✅ ${sortedFiles.length} chunks triés`);
+            resolve(sortedFiles);
+          }
+          return;
+        }
+
+        const chunkFile = chunkQueue.shift();
+        workerStates[availableWorkerIndex] = false;
+        activeTasks++;
+
+        this.processSingleChunk(chunkFile)
+          .then(sortedFile => {
+            sortedFiles.push(sortedFile);
+            completedChunks++;
+            activeTasks--;
+            workerStates[availableWorkerIndex] = true;
+
+            process.stdout.write(`\r🔄 Tri des chunks: ${completedChunks}/${chunkFiles.length} chunks traités...`);
+
+            if (completedChunks % 50 === 0 && global.gc) {
+              global.gc();
+            }
+
+            processNextChunk();
+          })
+          .catch(error => {
+            activeTasks--;
+            workerStates[availableWorkerIndex] = true;
+            console.error(`\n❌ Erreur tri chunk:`, error);
+            processNextChunk();
+          });
+
+        processNextChunk();
+      };
+
+      for (let i = 0; i < workerStates.length; i++) {
+        processNextChunk();
       }
-      process.stdout.write(`\r🔄 Tri des chunks: ${Math.min(i + this.numWorkers, chunkFiles.length).toLocaleString()}/${chunkFiles.length.toLocaleString()} chunks traités...`);
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    console.timeEnd('⏱️  Tri des chunks');
-    console.log(`✅ ${sortedFiles.length} chunks triés`);
-
-    return sortedFiles;
+    });
   }
 
   /**
