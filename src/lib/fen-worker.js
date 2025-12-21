@@ -2,18 +2,34 @@
 
 import { parentPort } from 'worker_threads';
 import { Chess } from 'chess.js';
+import { createHash } from 'crypto';
 
 /**
  * Worker pour traiter un batch de parties PGN et extraire les positions FEN
  */
+
+const cityHash64 = (str) => {
+  const hash = createHash('sha256').update(str).digest();
+  return hash.readBigUInt64LE(0);
+};
 
 /**
  * Normalise un FEN pour ne garder que les 4 premiers champs
  */
 function normalizeFen(fen) {
   const parts = fen.split(' ');
-  return `${parts[0]} ${parts[1]} ${parts[2]} ${parts[3]} 0 1`;
+  parts[4] = '0';
+  parts[5] = '1';
+  return parts.join(' ');
 }
+
+const isOfficialSource = (site, pgn) => {
+  const officialSources = ['TWIC', 'PGNMentor', 'twic', 'pgnmentor'];
+  return officialSources.some(source =>
+    site?.toLowerCase().includes(source.toLowerCase()) ||
+    pgn.toLowerCase().includes(source.toLowerCase())
+  );
+};
 
 /**
  * Extrait le résultat d'une partie PGN
@@ -31,6 +47,23 @@ function extractGameId(gameText) {
   return match ? match[1] : null;
 }
 
+function extractWhiteElo(gameText) {
+  const match = gameText.match(/\[WhiteElo\s+"([^"]+)"\]/);
+  if (!match) return 0;
+  const elo = parseInt(match[1]);
+  return isNaN(elo) ? 0 : elo;
+}
+
+function extractSite(gameText) {
+  const match = gameText.match(/\[Site\s+"([^"]+)"\]/);
+  return match ? match[1] : null;
+}
+
+function extractDate(gameText) {
+  const match = gameText.match(/\[Date\s+"([^"]+)"\]/);
+  return match ? match[1] : '1900.01.01';
+}
+
 /**
  * Traite une partie PGN et retourne toutes les positions avec l'ID de la partie
  */
@@ -38,13 +71,24 @@ function processGame(gameText) {
   const positions = [];
 
   try {
+    if (gameText.toLowerCase().includes('tcec')) {
+      return positions;
+    }
+
     const result = extractResult(gameText);
     if (!result || result === '*') {
-      return positions; // Ignorer les parties sans résultat valide
-    } const gameId = extractGameId(gameText);
+      return positions;
+    }
+
+    const gameId = extractGameId(gameText);
     if (!gameId) {
       return positions;
     }
+
+    const whiteElo = extractWhiteElo(gameText);
+    const site = extractSite(gameText);
+    const date = extractDate(gameText);
+    const official = isOfficialSource(site, gameText) ? 1 : 0;
 
     // Parser le PGN avec Chess.js
     const chess = new Chess();
@@ -58,22 +102,31 @@ function processGame(gameText) {
     for (let i = 0; i < history.length; i++) {
       const currentFen = replayChess.fen();
       const normalizedFen = normalizeFen(currentFen);
+      const hashFen = cityHash64(normalizedFen);
       positions.push({
+        hashFen: hashFen.toString(),
         fen: normalizedFen,
         result: result,
-        gameId: gameId
+        gameId: gameId,
+        whiteElo: whiteElo,
+        official: official,
+        date: date
       });
 
-      // Jouer le coup suivant
       replayChess.move(history[i].san);
     }
-    // Ajouter aussi la position finale
+
     const finalFen = replayChess.fen();
     const normalizedFinalFen = normalizeFen(finalFen);
+    const hashFinalFen = cityHash64(normalizedFinalFen);
     positions.push({
+      hashFen: hashFinalFen.toString(),
       fen: normalizedFinalFen,
       result: result,
-      gameId: gameId
+      gameId: gameId,
+      whiteElo: whiteElo,
+      official: official,
+      date: date
     });
 
   } catch (error) {

@@ -22,7 +22,7 @@ class MergeWorkerPool {
     this.activeWorkers = new Set();
     this.queue = [];
 
-    this.workerPath = path.join(process.cwd(), 'lib', 'merge-worker.js');
+    this.workerPath = path.join(process.cwd(), 'src', 'lib', 'merge-worker.js');
   }
 
   /**
@@ -221,7 +221,7 @@ class FenProcessor {
       }
 
       this.indexWriteStream = fs.createWriteStream(this.positionIndexFile, { encoding: 'utf8' });
-      this.indexWriteStream.write('fen\tgame_id\n');
+      this.indexWriteStream.write('hashFen\tfen\tgameId\twhiteElo\tofficial\tdate\n');
     }
 
     this.positionsInCurrentChunk = 0;
@@ -240,12 +240,12 @@ class FenProcessor {
       }
 
 
-      const line = `${position.fen}|${position.result}\n`;
+      const line = `${position.hashFen}|${position.fen}|${position.result}\n`;
       this.chunkWriteStream.write(line);
 
 
       if (position.gameId) {
-        const indexLine = `${position.fen}\t${position.gameId}\n`;
+        const indexLine = `${position.hashFen}\t${position.fen}\t${position.gameId}\t${position.whiteElo}\t${position.official}\t${position.date}\n`;
         this.indexWriteStream.write(indexLine);
       }
 
@@ -279,7 +279,7 @@ class FenProcessor {
     const batchQueue = [];
     let isStreamingComplete = false;
     let activeTasks = 0; for (let i = 0; i < this.numWorkers; i++) {
-      const worker = new Worker('./lib/fen-worker.js');
+      const worker = new Worker('./src/lib/fen-worker.js');
       workers.push(worker);
       workerStates.push(true);
 
@@ -750,21 +750,23 @@ class FenProcessor {
         for (const reader of readers) {
           if (!reader.finished && reader.currentLine) {
             const parts = reader.currentLine.split('\t');
-            if (parts.length >= 5) {
-              const fen = parts[0];
-              currentPositions.push({ fen, reader });
+            if (parts.length >= 6) {
+              const hash = parts[0];
+              const fen = parts[1];
+              currentPositions.push({ hash, fen, reader });
             }
           }
         }
 
         if (currentPositions.length === 0) break;
 
-        currentPositions.sort((a, b) => a.fen.localeCompare(b.fen));
+        currentPositions.sort((a, b) => a.hash.localeCompare(b.hash));
+        const minHash = currentPositions[0].hash;
         const minFen = currentPositions[0].fen;
-        const minReaders = currentPositions.filter(pos => pos.fen === minFen).map(pos => pos.reader);
+        const minReaders = currentPositions.filter(pos => pos.hash === minHash).map(pos => pos.reader);
 
-        if (currentFen !== null && currentFen !== minFen) {
-          const line = `${currentFen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
+        if (currentFen !== null && currentFen.hash !== minHash) {
+          const line = `${currentFen.hash}\t${currentFen.fen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
 
           if (currentStats.occurrence >= 10) {
             partitionStreams['10plus'].write(line);
@@ -776,17 +778,17 @@ class FenProcessor {
           currentStats = { occurrence: 0, white: 0, black: 0, draw: 0 };
         }
 
-        currentFen = minFen;
+        currentFen = { hash: minHash, fen: minFen };
 
         for (const reader of minReaders) {
           const parts = reader.currentLine.split('\t');
           totalLinesProcessed++;
 
 
-          currentStats.occurrence += parseInt(parts[1]) || 0;
-          currentStats.white += parseInt(parts[2]) || 0;
-          currentStats.black += parseInt(parts[3]) || 0;
-          currentStats.draw += parseInt(parts[4]) || 0;
+          currentStats.occurrence += parseInt(parts[2]) || 0;
+          currentStats.white += parseInt(parts[3]) || 0;
+          currentStats.black += parseInt(parts[4]) || 0;
+          currentStats.draw += parseInt(parts[5]) || 0;
 
           await this.readNextLine(reader);
           if (!reader.currentLine && reader.streamEnded) {
@@ -796,7 +798,7 @@ class FenProcessor {
       }
 
       if (currentFen !== null) {
-        const line = `${currentFen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
+        const line = `${currentFen.hash}\t${currentFen.fen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
 
         if (currentStats.occurrence >= 10) {
           partitionStreams['10plus'].write(line);
@@ -1023,7 +1025,6 @@ class FenProcessor {
         if (totalData) {
           reader.buffer += totalData;
 
-          const linesFound = processBuffer();
           if (reader.lineQueue.length >= batchSize || reader.lineQueue.length > 0) {
             resolve();
             return;
@@ -1053,8 +1054,6 @@ class FenProcessor {
         }
       };
 
-
-      const existingLines = processBuffer();
       if (reader.lineQueue.length >= batchSize) {
         resolve();
         return;
@@ -1122,7 +1121,8 @@ class FenProcessor {
 
       const finalResult = await this.calculateFinalStats();
       this.cleanupPartitionFiles();
-      this.cleanupPhaseDirectories();      console.log('\n🛡️  Traitement complet réussi - nettoyage final des fichiers _sorted...');
+      this.cleanupPhaseDirectories();
+      console.log('\n🛡️  Traitement complet réussi - nettoyage final des fichiers _sorted...');
       this.cleanupSortedFiles();
 
 
@@ -1206,8 +1206,8 @@ class FenProcessor {
 
 
     lines.sort((a, b) => {
-      const occA = parseInt(a.split('\t')[1]);
-      const occB = parseInt(b.split('\t')[1]);
+      const occA = parseInt(a.split('\t')[2]);
+      const occB = parseInt(b.split('\t')[2]);
       return occB - occA;
     });
 
@@ -1217,7 +1217,7 @@ class FenProcessor {
     }
 
     const writeStream = fs.createWriteStream(fensOnlyRecurrentFile, { encoding: 'utf8' });
-    writeStream.write('fen\toccurrence\twhite\tblack\tdraw\n');
+    writeStream.write('hash\tfen\toccurrence\twhite\tblack\tdraw\n');
 
     for (const line of lines) {
       writeStream.write(line + '\n');
@@ -1237,9 +1237,6 @@ class FenProcessor {
     console.log(`\n🔄 Génération des fichiers finaux par concaténation...`);
     console.time('⏱️  Génération fichiers finaux');
 
-    const header = 'fen\toccurrence\twhite\tblack\tdraw\n';
-
-
     const fensAllFile = path.join(this.outputDir, 'fens-all.tsv');
     const fensWithoutOneFile = path.join(this.outputDir, 'fens-withoutone.tsv');
     const fensOnlyRecurrentFile = path.join(this.outputDir, 'fens-onlyrecurrent.tsv');
@@ -1250,7 +1247,7 @@ class FenProcessor {
 
     console.log('📄 Création de fens-withoutone.tsv...');
     const withoutOneStream = fs.createWriteStream(fensWithoutOneFile, { encoding: 'utf8' });
-    withoutOneStream.write(header);
+    withoutOneStream.write('hash\tfen\toccurrence\twhite\tblack\tdraw\n');
 
 
     if (fs.existsSync(fensOnlyRecurrentFile)) {
@@ -1283,7 +1280,7 @@ class FenProcessor {
 
     console.log('📄 Création de fens-all.tsv...');
     const allStream = fs.createWriteStream(fensAllFile, { encoding: 'utf8' });
-    allStream.write(header);
+    allStream.write('hash\tfen\toccurrence\twhite\tblack\tdraw\n');
     if (fs.existsSync(fensWithoutOneFile)) {
       const { createInterface } = await import('readline');
       const fileStream = fs.createReadStream(fensWithoutOneFile, { encoding: 'utf8' });

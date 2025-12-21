@@ -267,22 +267,33 @@ class MergeWorker {
         for (const reader of readers) {
           if (!reader.finished && reader.lineQueue.length > 0) {
             const line = reader.lineQueue[0];
-            const separatorIndex = line.indexOf(isFirstPhase ? '|' : '\t');
-            if (separatorIndex !== -1) {
-              const fen = line.substring(0, separatorIndex);
-              currentPositions.push({ fen, reader, line, separatorIndex });
+            if (isFirstPhase) {
+              const firstPipe = line.indexOf('|');
+              if (firstPipe !== -1) {
+                const hash = line.substring(0, firstPipe);
+                const secondPipe = line.indexOf('|', firstPipe + 1);
+                const fen = line.substring(firstPipe + 1, secondPipe !== -1 ? secondPipe : line.length);
+                currentPositions.push({ hash, fen, reader, line, firstPipe, secondPipe });
+              }
+            } else {
+              const separatorIndex = line.indexOf('\t');
+              if (separatorIndex !== -1) {
+                const hash = line.substring(0, separatorIndex);
+                currentPositions.push({ hash, reader, line, separatorIndex });
+              }
             }
           }
         }
 
         if (currentPositions.length === 0) break;
 
-        currentPositions.sort((a, b) => a.fen.localeCompare(b.fen));
+        currentPositions.sort((a, b) => a.hash.localeCompare(b.hash));
+        const minHash = currentPositions[0].hash;
         const minFen = currentPositions[0].fen;
 
-        // Si on change de FEN, écrire la position actuelle
-        if (currentFen !== null && currentFen !== minFen) {
-          const line = `${currentFen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
+        // Si on change de hash, écrire la position actuelle
+        if (currentFen !== null && currentFen.hash !== minHash) {
+          const line = `${currentFen.hash}\t${currentFen.fen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
           writeBuffer += line;
 
           if (writeBuffer.length >= writeBufferLimit) {
@@ -294,17 +305,17 @@ class MergeWorker {
           currentStats = { occurrence: 0, white: 0, black: 0, draw: 0 };
         }
 
-        currentFen = minFen;
+        currentFen = { hash: minHash, fen: minFen };
 
         // Traiter tous les readers qui ont la position minimale
         for (const pos of currentPositions) {
-          if (pos.fen !== minFen) break;
+          if (pos.hash !== minHash) break;
 
           const reader = pos.reader;
           const line = reader.lineQueue.shift();
 
           if (isFirstPhase) {
-            const result = line.substring(pos.separatorIndex + 1);
+            const result = line.substring(pos.secondPipe + 1);
             currentStats.occurrence += 1;
             switch (result) {
               case '1-0': currentStats.white += 1; break;
@@ -313,16 +324,16 @@ class MergeWorker {
             }
           } else {
             const dataStr = line.substring(pos.separatorIndex + 1);
-            const tabs = [];
-            for (let i = 0; i < dataStr.length; i++) {
-              if (dataStr[i] === '\t') tabs.push(i);
-              if (tabs.length === 3) break;
+            const tabs = [pos.separatorIndex];
+            for (let i = pos.separatorIndex + 1; i < line.length; i++) {
+              if (line[i] === '\t') tabs.push(i);
+              if (tabs.length === 5) break;
             }
 
-            currentStats.occurrence += parseInt(dataStr.substring(0, tabs[0])) || 0;
-            currentStats.white += parseInt(dataStr.substring(tabs[0] + 1, tabs[1])) || 0;
-            currentStats.black += parseInt(dataStr.substring(tabs[1] + 1, tabs[2])) || 0;
-            currentStats.draw += parseInt(dataStr.substring(tabs[2] + 1)) || 0;
+            currentStats.occurrence += parseInt(line.substring(tabs[1] + 1, tabs[2])) || 0;
+            currentStats.white += parseInt(line.substring(tabs[2] + 1, tabs[3])) || 0;
+            currentStats.black += parseInt(line.substring(tabs[3] + 1, tabs[4])) || 0;
+            currentStats.draw += parseInt(line.substring(tabs[4] + 1)) || 0;
           }
 
           if (reader.lineQueue.length === 0 && reader.streamEnded) {
@@ -333,7 +344,7 @@ class MergeWorker {
 
       // Écrire la dernière position
       if (currentFen !== null) {
-        const line = `${currentFen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
+        const line = `${currentFen.hash}\t${currentFen.fen}\t${currentStats.occurrence}\t${currentStats.white}\t${currentStats.black}\t${currentStats.draw}\n`;
         writeBuffer += line;
         positionsWritten++;
       }
