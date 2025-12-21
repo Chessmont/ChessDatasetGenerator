@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 import fs from 'fs'
-import { createInterface } from 'readline'
 import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
+import { dirname } from 'path'
 import os from 'os'
-import WorkerPool from './lib/worker-pool.js'
+import { Worker } from 'worker_threads'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -15,7 +14,6 @@ class HashFensGenerator {
     this.inputFile = './src/output/fens-all.tsv'
     this.outputFile = './src/output/fens-all-v2.tsv'
     this.outputStream = null
-    this.workerPool = null
 
     this.numWorkers = os.cpus().length
     this.batchSize = 1000
@@ -55,119 +53,174 @@ class HashFensGenerator {
     console.log('✅ Fichier trouvé')
 
     console.log('📊 Comptage des lignes...')
-    const rl = createInterface({ input: fs.createReadStream(this.inputFile, { encoding: 'utf8' }) })
-    for await (const line of rl) {
-      this.totalLines++
-    }
-    console.log(`📊 ${this.totalLines.toLocaleString()} lignes à traiter`)
+    const stream = fs.createReadStream(this.inputFile, { encoding: 'utf8' })
+    let buffer = ''
+
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk) => {
+        buffer += chunk
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        this.totalLines += lines.length
+      })
+
+      stream.on('end', () => {
+        if (buffer.trim()) this.totalLines++
+        console.log(`📊 ${this.totalLines.toLocaleString()} lignes à traiter`)
+        resolve()
+      })
+
+      stream.on('error', reject)
+    })
   }
 
   async processFensFile() {
     console.log('\n🔄 Traitement du fichier Fens avec workers...')
     console.time('⏱️  Hash FENs')
 
-    this.workerPool = new WorkerPool(join(__dirname, 'lib', 'hash-fens-worker.js'))
-    const inputStream = fs.createReadStream(this.inputFile, {
-      encoding: 'utf8',
-      highWaterMark: 1024 * 1024
-    })
     this.outputStream = fs.createWriteStream(this.outputFile)
-    const rl = createInterface({ input: inputStream })
 
-    let isFirstLine = true
-    const batchLines = []
+    const workers = []
+    const workerStates = []
     const batchQueue = []
-    let batchId = 0
-    let streamPaused = false
     let isStreamingComplete = false
     let activeTasks = 0
+    let isFirstLine = true
 
-    const processNextBatch = async () => {
-      if (batchQueue.length === 0) {
-        if (isStreamingComplete && activeTasks === 0) {
+    for (let i = 0; i < this.numWorkers; i++) {
+      const worker = new Worker('./lib/hash-fens-worker.js')
+      workers.push(worker)
+      workerStates.push(true)
+
+      worker.on('message', (message) => {
+        activeTasks--
+        workerStates[i] = true
+
+        if (message.success) {
+          for (const line of message.result.lines) {
+            this.outputStream.write(line + '\n')
+          }
+
+          this.processedLines += message.result.lines.length
+          this.updateProgressLog()
+        } else {
+          console.error(`\nWorker ${i} error:`, message.error)
+        }
+
+        processNextBatch()
+      })
+
+      worker.on('error', (error) => {
+        activeTasks--
+        workerStates[i] = true
+        console.error(`\nWorker ${i} crashed:`, error)
+        processNextBatch()
+      })
+    }
+
+    const processNextBatch = () => {
+      const availableWorkerIndex = workerStates.findIndex(state => state === true)
+
+      if (availableWorkerIndex === -1 || batchQueue.length === 0) {
+        if (isStreamingComplete && activeTasks === 0 && batchQueue.length === 0) {
           finishProcessing()
         }
         return
       }
 
       const batch = batchQueue.shift()
+      const worker = workers[availableWorkerIndex]
+
+      workerStates[availableWorkerIndex] = false
       activeTasks++
+
+      worker.postMessage({
+        lines: batch,
+        batchId: Math.random().toString(36)
+      })
 
       if (streamPaused && batchQueue.length < this.maxQueueSize / 2) {
         streamPaused = false
-        inputStream.resume()
+        stream.resume()
       }
-
-      try {
-        const result = await this.workerPool.execute({ lines: batch.lines, batchId: batch.id })
-
-        for (const line of result.lines) {
-          this.outputStream.write(line + '\n')
-        }
-
-        this.processedLines += batch.lines.length
-        this.updateProgressLog()
-      } catch (error) {
-        console.error('\n❌ Erreur batch:', error.message)
-      }
-
-      activeTasks--
-      processNextBatch()
     }
 
     let promiseResolve = null
 
     const finishProcessing = () => {
+      workers.forEach(worker => worker.terminate())
       this.outputStream.end()
       console.log()
       console.timeEnd('⏱️  Hash FENs')
       if (promiseResolve) promiseResolve()
     }
 
-    for await (const line of rl) {
-      if (isFirstLine) {
-        this.outputStream.write(`hashFen\t${line}\n`)
-        isFirstLine = false
-        continue
-      }
+    const READ_CHUNK_SIZE = 1024 * 1024
+    const stream = fs.createReadStream(this.inputFile, {
+      encoding: 'utf8',
+      highWaterMark: READ_CHUNK_SIZE
+    })
 
-      batchLines.push(line)
+    let buffer = ''
+    let currentBatch = []
+    let streamPaused = false
 
-      if (batchLines.length >= this.batchSize) {
-        const batch = { id: batchId++, lines: [...batchLines] }
-        batchLines.length = 0
+    stream.on('data', (chunk) => {
+      buffer += chunk
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
 
-        batchQueue.push(batch)
-
-        if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
-          streamPaused = true
-          inputStream.pause()
+      for (const line of lines) {
+        if (isFirstLine) {
+          this.outputStream.write(`hashFen\t${line}\n`)
+          isFirstLine = false
+          continue
         }
 
-        if (activeTasks < this.numWorkers) {
+        currentBatch.push(line)
+
+        if (currentBatch.length >= this.batchSize) {
+          batchQueue.push([...currentBatch])
+          currentBatch = []
+
+          if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
+            streamPaused = true
+            stream.pause()
+          }
+
           processNextBatch()
         }
       }
-    }
-
-    if (batchLines.length > 0) {
-      batchQueue.push({ id: batchId++, lines: batchLines })
-    }
-
-    isStreamingComplete = true
-
-    while (activeTasks < this.numWorkers && batchQueue.length > 0) {
-      processNextBatch()
-    }
-
-    await new Promise((resolve) => {
-      promiseResolve = resolve
-      if (activeTasks === 0 && batchQueue.length === 0) {
-        finishProcessing()
-      }
     })
 
-    await this.workerPool.shutdown()
+    stream.on('end', () => {
+      if (buffer.trim()) {
+        if (isFirstLine) {
+          this.outputStream.write(`hashFen\t${buffer}\n`)
+          isFirstLine = false
+        } else {
+          currentBatch.push(buffer)
+        }
+      }
+
+      if (currentBatch.length > 0) {
+        batchQueue.push(currentBatch)
+      }
+
+      isStreamingComplete = true
+      processNextBatch()
+    })
+
+    stream.on('error', (error) => {
+      console.error('❌ Erreur de lecture du fichier:', error)
+      workers.forEach(worker => worker.terminate())
+      throw error
+    })
+
+    return new Promise((resolve, reject) => {
+      promiseResolve = resolve
+      stream.on('error', reject)
+    })
   }
 
   updateProgressLog() {

@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 import fs from 'fs'
-import { createInterface } from 'readline'
 import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
+import { dirname } from 'path'
 import os from 'os'
-import WorkerPool from './lib/worker-pool.js'
+import { Worker } from 'worker_threads'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -22,9 +21,8 @@ class TSVGenerator {
     this.startTime = null
     this.lastLogTime = 0
 
-    this.pgiWorkerPool = null
     this.numWorkers = os.cpus().length
-    this.batchSize = 500
+    this.batchSize = 16
     this.maxQueueSize = this.numWorkers * 4
   }
 
@@ -60,60 +58,78 @@ class TSVGenerator {
     console.log('\n🔄 Génération du fichier PGI depuis le PGN...')
     console.time('⏱️  Parsing PGN')
 
-    this.pgiWorkerPool = new WorkerPool(join(__dirname, 'lib', 'regen-pgi-worker.js'))
     this.pgiStream = fs.createWriteStream(this.outputPgiFile)
     this.pgiStream.write('hashFen\tfen\tgameId\twhiteElo\tofficial\tdate\n')
 
-    const stream = fs.createReadStream(this.pgnFile, {
-      encoding: 'utf8',
-      highWaterMark: 1024 * 1024
-    })
-    const rl = createInterface({ input: stream })
-
-    const batchLines = []
+    const workers = []
+    const workerStates = []
     const batchQueue = []
-    let batchId = 0
-    let streamPaused = false
     let isStreamingComplete = false
     let activeTasks = 0
 
-    const processNextBatch = async () => {
-      if (batchQueue.length === 0) {
-        if (isStreamingComplete && activeTasks === 0) {
+    for (let i = 0; i < this.numWorkers; i++) {
+      const worker = new Worker('./lib/regen-pgi-worker.js')
+      workers.push(worker)
+      workerStates.push(true)
+
+      worker.on('message', (message) => {
+        activeTasks--
+        workerStates[i] = true
+
+        if (message.success) {
+          for (const pos of message.result.positions) {
+            this.pgiStream.write(`${pos.hashFen}\t${pos.fen}\t${pos.gameId}\t${pos.whiteElo}\t${pos.official}\t${pos.date}\n`)
+          }
+
+          this.processedGames += message.result.processedGames
+          this.totalPositions += message.result.positions.length
+          this.updateProgressLog(this.processedGames, this.totalGames, 'parties')
+        } else {
+          console.error(`\nWorker ${i} error:`, message.error)
+        }
+
+        processNextBatch()
+      })
+
+      worker.on('error', (error) => {
+        activeTasks--
+        workerStates[i] = true
+        console.error(`\nWorker ${i} crashed:`, error)
+        processNextBatch()
+      })
+    }
+
+    const processNextBatch = () => {
+      const availableWorkerIndex = workerStates.findIndex(state => state === true)
+
+      if (availableWorkerIndex === -1 || batchQueue.length === 0) {
+        if (isStreamingComplete && activeTasks === 0 && batchQueue.length === 0) {
           finishProcessing()
         }
         return
       }
 
       const batch = batchQueue.shift()
+      const worker = workers[availableWorkerIndex]
+
+      workerStates[availableWorkerIndex] = false
       activeTasks++
+
+      worker.postMessage({
+        pgnLines: batch,
+        batchId: Math.random().toString(36)
+      })
 
       if (streamPaused && batchQueue.length < this.maxQueueSize / 2) {
         streamPaused = false
         stream.resume()
       }
-
-      try {
-        const result = await this.pgiWorkerPool.execute({ pgnLines: batch.lines, batchId: batch.id })
-
-        for (const pos of result.positions) {
-          this.pgiStream.write(`${pos.hashFen}\t${pos.fen}\t${pos.gameId}\t${pos.whiteElo}\t${pos.official}\t${pos.date}\n`)
-        }
-
-        this.processedGames += result.processedGames
-        this.totalPositions += result.positions.length
-        this.updateProgressLog(this.processedGames, this.totalGames, 'parties')
-      } catch (error) {
-        console.error('\n❌ Erreur batch:', error.message)
-      }
-
-      activeTasks--
-      processNextBatch()
     }
 
     let promiseResolve = null
 
     const finishProcessing = () => {
+      workers.forEach(worker => worker.terminate())
       this.pgiStream.end()
       console.log()
       console.timeEnd('⏱️  Parsing PGN')
@@ -122,44 +138,61 @@ class TSVGenerator {
       if (promiseResolve) promiseResolve()
     }
 
-    for await (const line of rl) {
-      batchLines.push(line)
+    const READ_CHUNK_SIZE = 1024 * 1024
+    const stream = fs.createReadStream(this.pgnFile, {
+      encoding: 'utf8',
+      highWaterMark: READ_CHUNK_SIZE
+    })
 
-      if (batchLines.length >= this.batchSize) {
-        const batch = { id: batchId++, lines: [...batchLines] }
-        batchLines.length = 0
+    let buffer = ''
+    let currentBatch = []
+    let streamPaused = false
 
-        batchQueue.push(batch)
+    stream.on('data', (chunk) => {
+      buffer += chunk
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
 
-        if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
-          streamPaused = true
-          stream.pause()
-        }
+      for (const line of lines) {
+        currentBatch.push(line)
 
-        if (activeTasks < this.numWorkers) {
+        if (currentBatch.length >= this.batchSize) {
+          batchQueue.push([...currentBatch])
+          currentBatch = []
+
+          if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
+            streamPaused = true
+            stream.pause()
+          }
+
           processNextBatch()
         }
       }
-    }
-
-    if (batchLines.length > 0) {
-      batchQueue.push({ id: batchId++, lines: batchLines })
-    }
-
-    isStreamingComplete = true
-
-    while (activeTasks < this.numWorkers && batchQueue.length > 0) {
-      processNextBatch()
-    }
-
-    await new Promise((resolve) => {
-      promiseResolve = resolve
-      if (activeTasks === 0 && batchQueue.length === 0) {
-        finishProcessing()
-      }
     })
 
-    await this.pgiWorkerPool.shutdown()
+    stream.on('end', () => {
+      if (buffer.trim()) {
+        currentBatch.push(buffer)
+      }
+
+      if (currentBatch.length > 0) {
+        batchQueue.push(currentBatch)
+      }
+
+      isStreamingComplete = true
+      processNextBatch()
+    })
+
+    stream.on('error', (error) => {
+      console.error('❌ Erreur de lecture du fichier:', error)
+      workers.forEach(worker => worker.terminate())
+      throw error
+    })
+
+    return new Promise((resolve, reject) => {
+      promiseResolve = resolve
+      stream.on('error', reject)
+    })
   }
 
   updateProgressLog(processed, total, type) {
