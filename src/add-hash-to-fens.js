@@ -22,6 +22,7 @@ class HashFensGenerator {
     this.maxQueueSize = this.numWorkers * 4
 
     this.processedLines = 0
+    this.totalLines = 0
     this.startTime = null
     this.lastLogTime = 0
   }
@@ -52,6 +53,13 @@ class HashFensGenerator {
       throw new Error(`Fichier manquant: ${this.inputFile}`)
     }
     console.log('✅ Fichier trouvé')
+    
+    console.log('📊 Comptage des lignes...')
+    const rl = createInterface({ input: fs.createReadStream(this.inputFile, { encoding: 'utf8' }) })
+    for await (const line of rl) {
+      this.totalLines++
+    }
+    console.log(`📊 ${this.totalLines.toLocaleString()} lignes à traiter`)
   }
 
   async processFensFile() {
@@ -133,10 +141,16 @@ class HashFensGenerator {
     if (now - this.lastLogTime < 500) return
     this.lastLogTime = now
 
+    const percentage = this.totalLines > 0 ? ((this.processedLines / this.totalLines) * 100).toFixed(1) : '0.0'
     const elapsed = (now - this.startTime) / 1000
-    const elapsedStr = this.formatTime(elapsed)
+    const avgTime = elapsed / this.processedLines
+    const remaining = this.totalLines - this.processedLines
+    const eta = avgTime * remaining
 
-    process.stdout.write(`\r📝 ${this.processedLines.toLocaleString()} lignes traitées - ⏱️ ${elapsedStr}`)
+    const elapsedStr = this.formatTime(elapsed)
+    const etaStr = this.formatTime(eta)
+
+    process.stdout.write(`\r📝 Hash: ${this.processedLines.toLocaleString()}/${this.totalLines.toLocaleString()} (${percentage}%) - ⏱️ ${elapsedStr} / ETA ${etaStr}`)
   }
 
   formatTime(seconds) {

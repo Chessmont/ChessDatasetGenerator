@@ -118,8 +118,23 @@ class TSVGenerator {
     }
 
     await Promise.all(pendingBatches)
+    await this.pgiWorkerPool.shutdown()
+    this.pgiStream.end()
+
+    console.log()
+    console.timeEnd('⏱️  Parsing PGN')
+    console.log(`✅ ${this.processedGames.toLocaleString()} parties parsées`)
+    console.log(`✅ ${this.totalPositions.toLocaleString()} positions traitées`)
+  }
+
+  updateProgressLog(processed, total, type) {
+    const now = Date.now()
+
+    if (now - this.lastLogTime < 500) return
+    this.lastLogTime = now
+
     const percentage = total > 0 ? ((processed / total) * 100).toFixed(1) : '0.0'
-    const elapsed = (now - (this.startTime || now)) / 1000
+    const elapsed = (now - this.startTime) / 1000
     const avgTime = elapsed / processed
     const remaining = total - processed
     const eta = avgTime * remaining
@@ -127,7 +142,7 @@ class TSVGenerator {
     const elapsedStr = this.formatTime(elapsed)
     const etaStr = this.formatTime(eta)
 
-    process.stdout.write(`\r🔄 ${type}: ${processed.toLocaleString()}/${total.toLocaleString()} (${percentage}%) - ⏱️ ${elapsedStr} / ETA ${etaStr}`)
+    process.stdout.write(`\r🔄 ${type}: ${processed.toLocaleString()}/${total.toLocaleString()} (${percentage}%) - ${this.totalPositions.toLocaleString()} positions - ⏱️ ${elapsedStr} / ETA ${etaStr}`)
   }
 
   formatTime(seconds) {
