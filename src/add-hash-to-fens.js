@@ -81,9 +81,7 @@ class HashFensGenerator {
 
       this.processedLines += batch.lines.length
 
-      if (this.processedLines % 100000 === 0) {
-        this.updateProgressLog()
-      }
+      this.updateProgressLog()
     }
 
     for await (const line of rl) {
@@ -122,6 +120,20 @@ class HashFensGenerator {
     }
 
     await Promise.all(pendingBatches)
+    await this.workerPool.shutdown()
+    this.outputStream.end()
+
+    console.log()
+    console.timeEnd('⏱️  Hash FENs')
+  }
+
+  updateProgressLog() {
+    const now = Date.now()
+
+    if (now - this.lastLogTime < 500) return
+    this.lastLogTime = now
+
+    const elapsed = (now - this.startTime) / 1000
     const elapsedStr = this.formatTime(elapsed)
 
     process.stdout.write(`\r📝 ${this.processedLines.toLocaleString()} lignes traitées - ⏱️ ${elapsedStr}`)

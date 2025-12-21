@@ -17,7 +17,7 @@ class TSVGenerator {
 
     this.pgiStream = null
     this.processedGames = 0
-    this.totalGames = 21512376
+    this.totalGames = 21521235
     this.totalPositions = 0
     this.startTime = null
     this.lastLogTime = 0
@@ -85,9 +85,7 @@ class TSVGenerator {
       this.processedGames += result.processedGames
       this.totalPositions += result.positions.length
 
-      if (this.processedGames % 1000 === 0) {
-        this.updateProgressLog(this.processedGames, this.totalGames, 'parties')
-      }
+      this.updateProgressLog(this.processedGames, this.totalGames, 'parties')
     }
 
     for await (const line of rl) {
