@@ -68,7 +68,7 @@ class TSVGenerator {
     let activeTasks = 0
 
     for (let i = 0; i < this.numWorkers; i++) {
-      const worker = new Worker(join(__dirname, 'lib', 'regen-pgi-worker.js'))
+      const worker = new Worker('./lib/regen-pgi-worker.js')
       workers.push(worker)
       workerStates.push(true)
 

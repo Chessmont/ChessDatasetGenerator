@@ -13,11 +13,11 @@ class AddHashProcessor {
   constructor() {
     this.inputFile = path.join(__dirname, 'output', 'fens-all.tsv');
     this.outputFile = path.join(__dirname, 'output', 'fens-all-hashed.tsv');
-    
+
     this.numWorkers = os.cpus().length;
     this.batchSize = 16;
     this.maxQueueSize = this.numWorkers * 4;
-    
+
     this.totalLines = 0;
     this.processedLines = 0;
     this.startTime = null;
@@ -26,13 +26,13 @@ class AddHashProcessor {
 
   async countTotalLines() {
     console.log(`🔍 Comptage des lignes dans ${this.inputFile}...`);
-    
+
     return new Promise((resolve, reject) => {
       let lineCount = 0;
       const stream = fs.createReadStream(this.inputFile, { encoding: 'utf8' });
       const { createInterface } = require('readline');
       const rl = createInterface({ input: stream });
-      
+
       rl.on('line', () => lineCount++);
       rl.on('close', () => {
         this.totalLines = Math.max(0, lineCount - 1);
@@ -77,7 +77,7 @@ class AddHashProcessor {
           for (const line of message.result.lines) {
             outputStream.write(line + '\n');
           }
-          
+
           this.processedLines += message.result.processedCount;
           this.updateProgressLog();
         } else {
@@ -159,7 +159,7 @@ class AddHashProcessor {
           isFirstLine = false;
           continue;
         }
-        
+
         if (line.trim()) {
           currentBatch.push(line);
 
