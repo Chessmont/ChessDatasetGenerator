@@ -361,7 +361,7 @@ class MergeWorker {
       await new Promise(resolve => outputStream.on('finish', resolve));
 
       const elapsed = (Date.now() - startTime) / 1000;
-      
+
       return {
         success: true,
         positionsWritten,
@@ -391,7 +391,7 @@ if (parentPort) {
 
     try {
       const result = await worker.kWayMergeToSingleFile(inputFiles, outputFile, isFirstPhase);
-      
+
       parentPort.postMessage({
         ...result,
         batchId
