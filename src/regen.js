@@ -116,7 +116,7 @@ class TSVGenerator {
       activeTasks++
 
       worker.postMessage({
-        pgnLines: batch,
+        games: batch,
         batchId: Math.random().toString(36)
       })
 
@@ -145,6 +145,8 @@ class TSVGenerator {
     })
 
     let buffer = ''
+    let currentGame = ''
+    let inGame = false
     let currentBatch = []
     let streamPaused = false
 
@@ -154,25 +156,47 @@ class TSVGenerator {
       buffer = lines.pop() || ''
 
       for (const line of lines) {
-        currentBatch.push(line)
+        if (line.startsWith('[ID ')) {
+          if (inGame && currentGame.trim()) {
+            currentBatch.push(currentGame)
 
-        if (currentBatch.length >= this.batchSize) {
-          batchQueue.push([...currentBatch])
-          currentBatch = []
+            if (currentBatch.length >= this.batchSize) {
+              batchQueue.push([...currentBatch])
+              currentBatch = []
 
-          if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
-            streamPaused = true
-            stream.pause()
+              if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
+                streamPaused = true
+                stream.pause()
+              }
+
+              processNextBatch()
+            }
           }
 
-          processNextBatch()
+          currentGame = line + '\n'
+          inGame = true
+        } else {
+          currentGame += line + '\n'
         }
       }
     })
 
     stream.on('end', () => {
       if (buffer.trim()) {
-        currentBatch.push(buffer)
+        const line = buffer.trim()
+        if (line.startsWith('[ID ')) {
+          if (inGame && currentGame.trim()) {
+            currentBatch.push(currentGame)
+          }
+          currentGame = line + '\n'
+          inGame = true
+        } else {
+          currentGame += line + '\n'
+        }
+      }
+
+      if (inGame && currentGame.trim()) {
+        currentBatch.push(currentGame)
       }
 
       if (currentBatch.length > 0) {

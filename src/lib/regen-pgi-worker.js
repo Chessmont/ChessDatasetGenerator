@@ -110,39 +110,28 @@ const processGame = (game, pgn) => {
 
 parentPort.on('message', (data) => {
   try {
-    const { pgnLines, batchId } = data
+    const { games, batchId } = data
     const allPositions = []
     let processedGames = 0
 
-    let currentGame = null
-    let currentPgn = ''
-    let inGame = false
+    for (const pgn of games) {
+      const lines = pgn.split('\n')
+      let currentGame = null
 
-    for (const line of pgnLines) {
-      if (line.startsWith('[ID ')) {
-        if (currentGame && inGame) {
-          const positions = processGame(currentGame, currentPgn)
-          allPositions.push(...positions)
-          processedGames++
-        }
-
-        currentGame = parseGameHeaders(line)
-        if (!currentGame) continue
-        currentPgn = line + '\n'
-        inGame = true
-      } else if (inGame) {
-        currentPgn += line + '\n'
-
-        if (line.startsWith('[')) {
+      for (const line of lines) {
+        if (line.startsWith('[ID ')) {
+          currentGame = parseGameHeaders(line)
+          if (!currentGame) break
+        } else if (currentGame && line.startsWith('[')) {
           parseAdditionalHeader(currentGame, line)
         }
       }
-    }
 
-    if (currentGame && inGame) {
-      const positions = processGame(currentGame, currentPgn)
-      allPositions.push(...positions)
-      processedGames++
+      if (currentGame) {
+        const positions = processGame(currentGame, pgn)
+        allPositions.push(...positions)
+        processedGames++
+      }
     }
 
     parentPort.postMessage({
