@@ -68,20 +68,11 @@ class HashFensGenerator {
 
     let isFirstLine = true
     const batchLines = []
-    const batchQueue = []
+    const pendingBatches = []
     let batchId = 0
     let streamPaused = false
 
-    const processNextBatch = async () => {
-      if (batchQueue.length === 0) return
-
-      const batch = batchQueue.shift()
-
-      if (streamPaused && batchQueue.length < this.maxQueueSize / 2) {
-        streamPaused = false
-        inputStream.resume()
-      }
-
+    const processNextBatch = async (batch) => {
       const result = await this.workerPool.execute({ lines: batch.lines, batchId: batch.id })
 
       for (const line of result.lines) {
@@ -108,40 +99,29 @@ class HashFensGenerator {
         const batch = { id: batchId++, lines: [...batchLines] }
         batchLines.length = 0
 
-        batchQueue.push(batch)
+        const promise = processNextBatch(batch)
+        pendingBatches.push(promise)
 
-        if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
-          streamPaused = true
-          inputStream.pause()
+        if (pendingBatches.length >= this.maxQueueSize) {
+          if (!streamPaused) {
+            streamPaused = true
+            inputStream.pause()
+          }
+          await Promise.race(pendingBatches.map(p => p.then(() => p)))
         }
 
-        processNextBatch()
+        if (streamPaused && pendingBatches.length < this.maxQueueSize / 2) {
+          streamPaused = false
+          inputStream.resume()
+        }
       }
     }
 
     if (batchLines.length > 0) {
-      batchQueue.push({ id: batchId++, lines: batchLines })
+      pendingBatches.push(processNextBatch({ id: batchId++, lines: batchLines }))
     }
 
-    while (batchQueue.length > 0) {
-      await processNextBatch()
-    }
-
-    await this.workerPool.waitForCompletion()
-    await this.workerPool.shutdown()
-    this.outputStream.end()
-
-    console.log()
-    console.timeEnd('⏱️  Hash FENs')
-  }
-
-  updateProgressLog() {
-    const now = Date.now()
-
-    if (now - this.lastLogTime < 1000) return
-    this.lastLogTime = now
-
-    const elapsed = (now - this.startTime) / 1000
+    await Promise.all(pendingBatches)
     const elapsedStr = this.formatTime(elapsed)
 
     process.stdout.write(`\r📝 ${this.processedLines.toLocaleString()} lignes traitées - ⏱️ ${elapsedStr}`)

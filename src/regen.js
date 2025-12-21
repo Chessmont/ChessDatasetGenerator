@@ -24,7 +24,7 @@ class TSVGenerator {
 
     this.pgiWorkerPool = null
     this.numWorkers = os.cpus().length
-    this.batchSize = 1000
+    this.batchSize = 500
     this.maxQueueSize = this.numWorkers * 4
   }
 
@@ -71,20 +71,11 @@ class TSVGenerator {
     const rl = createInterface({ input: stream })
 
     const batchLines = []
-    const batchQueue = []
+    const pendingBatches = []
     let batchId = 0
     let streamPaused = false
 
-    const processNextBatch = async () => {
-      if (batchQueue.length === 0) return
-
-      const batch = batchQueue.shift()
-
-      if (streamPaused && batchQueue.length < this.maxQueueSize / 2) {
-        streamPaused = false
-        stream.resume()
-      }
-
+    const processNextBatch = async (batch) => {
       const result = await this.pgiWorkerPool.execute({ pgnLines: batch.lines, batchId: batch.id })
 
       for (const pos of result.positions) {
@@ -106,41 +97,29 @@ class TSVGenerator {
         const batch = { id: batchId++, lines: [...batchLines] }
         batchLines.length = 0
 
-        batchQueue.push(batch)
+        const promise = processNextBatch(batch)
+        pendingBatches.push(promise)
 
-        if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
-          streamPaused = true
-          stream.pause()
+        if (pendingBatches.length >= this.maxQueueSize) {
+          if (!streamPaused) {
+            streamPaused = true
+            stream.pause()
+          }
+          await Promise.race(pendingBatches.map(p => p.then(() => p)))
         }
 
-        processNextBatch()
+        if (streamPaused && pendingBatches.length < this.maxQueueSize / 2) {
+          streamPaused = false
+          stream.resume()
+        }
       }
     }
 
     if (batchLines.length > 0) {
-      batchQueue.push({ id: batchId++, lines: batchLines })
+      pendingBatches.push(processNextBatch({ id: batchId++, lines: batchLines }))
     }
 
-    while (batchQueue.length > 0) {
-      await processNextBatch()
-    }
-
-    await this.pgiWorkerPool.waitForCompletion()
-    await this.pgiWorkerPool.shutdown()
-    this.pgiStream.end()
-
-    console.log()
-    console.timeEnd('⏱️  Parsing PGN')
-    console.log(`✅ ${this.processedGames.toLocaleString()} parties parsées`)
-    console.log(`✅ ${this.totalPositions.toLocaleString()} positions traitées`)
-  }
-
-  updateProgressLog(processed, total, type) {
-    const now = Date.now()
-
-    if (now - this.lastLogTime < 1000) return
-    this.lastLogTime = now
-
+    await Promise.all(pendingBatches)
     const percentage = total > 0 ? ((processed / total) * 100).toFixed(1) : '0.0'
     const elapsed = (now - (this.startTime || now)) / 1000
     const avgTime = elapsed / processed
