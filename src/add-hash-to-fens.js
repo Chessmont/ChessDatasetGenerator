@@ -53,7 +53,7 @@ class HashFensGenerator {
       throw new Error(`Fichier manquant: ${this.inputFile}`)
     }
     console.log('✅ Fichier trouvé')
-    
+
     console.log('📊 Comptage des lignes...')
     const rl = createInterface({ input: fs.createReadStream(this.inputFile, { encoding: 'utf8' }) })
     for await (const line of rl) {
