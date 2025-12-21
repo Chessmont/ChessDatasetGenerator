@@ -287,7 +287,11 @@ class MergeWorker {
 
         if (currentPositions.length === 0) break;
 
-        currentPositions.sort((a, b) => a.hash.localeCompare(b.hash));
+        currentPositions.sort((a, b) => {
+          const hashA = BigInt(a.hash);
+          const hashB = BigInt(b.hash);
+          return hashA < hashB ? -1 : hashA > hashB ? 1 : 0;
+        });
         const minHash = currentPositions[0].hash;
         const minFen = currentPositions[0].fen;
 
