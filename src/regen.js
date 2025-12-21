@@ -71,21 +71,55 @@ class TSVGenerator {
     const rl = createInterface({ input: stream })
 
     const batchLines = []
-    const pendingBatches = []
+    const batchQueue = []
     let batchId = 0
     let streamPaused = false
+    let isStreamingComplete = false
+    let activeTasks = 0
 
-    const processNextBatch = async (batch) => {
-      const result = await this.pgiWorkerPool.execute({ pgnLines: batch.lines, batchId: batch.id })
-
-      for (const pos of result.positions) {
-        this.pgiStream.write(`${pos.hashFen}\t${pos.fen}\t${pos.gameId}\t${pos.whiteElo}\t${pos.official}\t${pos.date}\n`)
+    const processNextBatch = async () => {
+      if (batchQueue.length === 0) {
+        if (isStreamingComplete && activeTasks === 0) {
+          finishProcessing()
+        }
+        return
       }
 
-      this.processedGames += result.processedGames
-      this.totalPositions += result.positions.length
+      const batch = batchQueue.shift()
+      activeTasks++
 
-      this.updateProgressLog(this.processedGames, this.totalGames, 'parties')
+      if (streamPaused && batchQueue.length < this.maxQueueSize / 2) {
+        streamPaused = false
+        stream.resume()
+      }
+
+      try {
+        const result = await this.pgiWorkerPool.execute({ pgnLines: batch.lines, batchId: batch.id })
+
+        for (const pos of result.positions) {
+          this.pgiStream.write(`${pos.hashFen}\t${pos.fen}\t${pos.gameId}\t${pos.whiteElo}\t${pos.official}\t${pos.date}\n`)
+        }
+
+        this.processedGames += result.processedGames
+        this.totalPositions += result.positions.length
+        this.updateProgressLog(this.processedGames, this.totalGames, 'parties')
+      } catch (error) {
+        console.error('\n❌ Erreur batch:', error.message)
+      }
+
+      activeTasks--
+      processNextBatch()
+    }
+
+    let promiseResolve = null
+
+    const finishProcessing = () => {
+      this.pgiStream.end()
+      console.log()
+      console.timeEnd('⏱️  Parsing PGN')
+      console.log(`✅ ${this.processedGames.toLocaleString()} parties parsées`)
+      console.log(`✅ ${this.totalPositions.toLocaleString()} positions traitées`)
+      if (promiseResolve) promiseResolve()
     }
 
     for await (const line of rl) {
@@ -95,36 +129,37 @@ class TSVGenerator {
         const batch = { id: batchId++, lines: [...batchLines] }
         batchLines.length = 0
 
-        const promise = processNextBatch(batch)
-        pendingBatches.push(promise)
+        batchQueue.push(batch)
 
-        if (pendingBatches.length >= this.maxQueueSize) {
-          if (!streamPaused) {
-            streamPaused = true
-            stream.pause()
-          }
-          await Promise.race(pendingBatches.map(p => p.then(() => p)))
+        if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
+          streamPaused = true
+          stream.pause()
         }
 
-        if (streamPaused && pendingBatches.length < this.maxQueueSize / 2) {
-          streamPaused = false
-          stream.resume()
+        if (activeTasks < this.numWorkers) {
+          processNextBatch()
         }
       }
     }
 
     if (batchLines.length > 0) {
-      pendingBatches.push(processNextBatch({ id: batchId++, lines: batchLines }))
+      batchQueue.push({ id: batchId++, lines: batchLines })
     }
 
-    await Promise.all(pendingBatches)
-    await this.pgiWorkerPool.shutdown()
-    this.pgiStream.end()
+    isStreamingComplete = true
 
-    console.log()
-    console.timeEnd('⏱️  Parsing PGN')
-    console.log(`✅ ${this.processedGames.toLocaleString()} parties parsées`)
-    console.log(`✅ ${this.totalPositions.toLocaleString()} positions traitées`)
+    while (activeTasks < this.numWorkers && batchQueue.length > 0) {
+      processNextBatch()
+    }
+
+    await new Promise((resolve) => {
+      promiseResolve = resolve
+      if (activeTasks === 0 && batchQueue.length === 0) {
+        finishProcessing()
+      }
+    })
+
+    await this.pgiWorkerPool.shutdown()
   }
 
   updateProgressLog(processed, total, type) {

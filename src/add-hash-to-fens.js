@@ -76,20 +76,52 @@ class HashFensGenerator {
 
     let isFirstLine = true
     const batchLines = []
-    const pendingBatches = []
+    const batchQueue = []
     let batchId = 0
     let streamPaused = false
+    let isStreamingComplete = false
+    let activeTasks = 0
 
-    const processNextBatch = async (batch) => {
-      const result = await this.workerPool.execute({ lines: batch.lines, batchId: batch.id })
-
-      for (const line of result.lines) {
-        this.outputStream.write(line + '\n')
+    const processNextBatch = async () => {
+      if (batchQueue.length === 0) {
+        if (isStreamingComplete && activeTasks === 0) {
+          finishProcessing()
+        }
+        return
       }
 
-      this.processedLines += batch.lines.length
+      const batch = batchQueue.shift()
+      activeTasks++
 
-      this.updateProgressLog()
+      if (streamPaused && batchQueue.length < this.maxQueueSize / 2) {
+        streamPaused = false
+        inputStream.resume()
+      }
+
+      try {
+        const result = await this.workerPool.execute({ lines: batch.lines, batchId: batch.id })
+
+        for (const line of result.lines) {
+          this.outputStream.write(line + '\n')
+        }
+
+        this.processedLines += batch.lines.length
+        this.updateProgressLog()
+      } catch (error) {
+        console.error('\n❌ Erreur batch:', error.message)
+      }
+
+      activeTasks--
+      processNextBatch()
+    }
+
+    let promiseResolve = null
+
+    const finishProcessing = () => {
+      this.outputStream.end()
+      console.log()
+      console.timeEnd('⏱️  Hash FENs')
+      if (promiseResolve) promiseResolve()
     }
 
     for await (const line of rl) {
@@ -105,34 +137,37 @@ class HashFensGenerator {
         const batch = { id: batchId++, lines: [...batchLines] }
         batchLines.length = 0
 
-        const promise = processNextBatch(batch)
-        pendingBatches.push(promise)
+        batchQueue.push(batch)
 
-        if (pendingBatches.length >= this.maxQueueSize) {
-          if (!streamPaused) {
-            streamPaused = true
-            inputStream.pause()
-          }
-          await Promise.race(pendingBatches.map(p => p.then(() => p)))
+        if (!streamPaused && batchQueue.length >= this.maxQueueSize) {
+          streamPaused = true
+          inputStream.pause()
         }
 
-        if (streamPaused && pendingBatches.length < this.maxQueueSize / 2) {
-          streamPaused = false
-          inputStream.resume()
+        if (activeTasks < this.numWorkers) {
+          processNextBatch()
         }
       }
     }
 
     if (batchLines.length > 0) {
-      pendingBatches.push(processNextBatch({ id: batchId++, lines: batchLines }))
+      batchQueue.push({ id: batchId++, lines: batchLines })
     }
 
-    await Promise.all(pendingBatches)
-    await this.workerPool.shutdown()
-    this.outputStream.end()
+    isStreamingComplete = true
 
-    console.log()
-    console.timeEnd('⏱️  Hash FENs')
+    while (activeTasks < this.numWorkers && batchQueue.length > 0) {
+      processNextBatch()
+    }
+
+    await new Promise((resolve) => {
+      promiseResolve = resolve
+      if (activeTasks === 0 && batchQueue.length === 0) {
+        finishProcessing()
+      }
+    })
+
+    await this.workerPool.shutdown()
   }
 
   updateProgressLog() {
