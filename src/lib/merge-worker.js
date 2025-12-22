@@ -268,18 +268,19 @@ class MergeWorker {
           if (!reader.finished && reader.lineQueue.length > 0) {
             const line = reader.lineQueue[0];
             if (isFirstPhase) {
-              const firstPipe = line.indexOf('|');
-              if (firstPipe !== -1) {
-                const hash = line.substring(0, firstPipe);
-                const secondPipe = line.indexOf('|', firstPipe + 1);
-                const fen = line.substring(firstPipe + 1, secondPipe !== -1 ? secondPipe : line.length);
-                currentPositions.push({ hash, fen, reader, line, firstPipe, secondPipe });
+              const parts = line.split('|');
+              if (parts.length >= 3) {
+                const hash = parts[0];
+                const fen = parts[1];
+                const result = parts[2];
+                currentPositions.push({ hash, fen, result, reader, line });
               }
             } else {
-              const separatorIndex = line.indexOf('\t');
-              if (separatorIndex !== -1) {
-                const hash = line.substring(0, separatorIndex);
-                currentPositions.push({ hash, reader, line, separatorIndex });
+              const parts = line.split('\t');
+              if (parts.length >= 2) {
+                const hash = parts[0];
+                const fen = parts[1];
+                currentPositions.push({ hash, fen, reader, line });
               }
             }
           }
@@ -319,25 +320,18 @@ class MergeWorker {
           const line = reader.lineQueue.shift();
 
           if (isFirstPhase) {
-            const result = line.substring(pos.secondPipe + 1);
             currentStats.occurrence += 1;
-            switch (result) {
+            switch (pos.result) {
               case '1-0': currentStats.white += 1; break;
               case '0-1': currentStats.black += 1; break;
               case '1/2-1/2': currentStats.draw += 1; break;
             }
           } else {
-            const dataStr = line.substring(pos.separatorIndex + 1);
-            const tabs = [pos.separatorIndex];
-            for (let i = pos.separatorIndex + 1; i < line.length; i++) {
-              if (line[i] === '\t') tabs.push(i);
-              if (tabs.length === 5) break;
-            }
-
-            currentStats.occurrence += parseInt(line.substring(tabs[1] + 1, tabs[2])) || 0;
-            currentStats.white += parseInt(line.substring(tabs[2] + 1, tabs[3])) || 0;
-            currentStats.black += parseInt(line.substring(tabs[3] + 1, tabs[4])) || 0;
-            currentStats.draw += parseInt(line.substring(tabs[4] + 1)) || 0;
+            const parts = line.split('\t');
+            currentStats.occurrence += parseInt(parts[2]) || 0;
+            currentStats.white += parseInt(parts[3]) || 0;
+            currentStats.black += parseInt(parts[4]) || 0;
+            currentStats.draw += parseInt(parts[5]) || 0;
           }
 
           if (reader.lineQueue.length === 0 && reader.streamEnded) {

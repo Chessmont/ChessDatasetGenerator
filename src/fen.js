@@ -514,17 +514,30 @@ class FenProcessor {
 
       rl.on('close', () => {
         try {
-
-
           lines.sort((a, b) => {
             const hashA = BigInt(a.split('|')[0]);
             const hashB = BigInt(b.split('|')[0]);
             return hashA < hashB ? -1 : hashA > hashB ? 1 : 0;
           });
-          const writeStream = fs.createWriteStream(sortedFile, { encoding: 'utf8' });
+          
+          const writeStream = fs.createWriteStream(sortedFile, { 
+            encoding: 'utf8',
+            highWaterMark: 8 * 1024 * 1024
+          });
 
+          let buffer = '';
+          const bufferLimit = 4 * 1024 * 1024;
+          
           for (const line of lines) {
-            writeStream.write(line + '\n');
+            buffer += line + '\n';
+            if (buffer.length >= bufferLimit) {
+              writeStream.write(buffer);
+              buffer = '';
+            }
+          }
+          
+          if (buffer.length > 0) {
+            writeStream.write(buffer);
           }
 
           writeStream.end();
