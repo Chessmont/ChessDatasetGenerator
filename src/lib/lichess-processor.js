@@ -50,10 +50,6 @@ class LichessProcessor {
    */
   initializeOutputFiles() {
     try {
-      if (!fs.existsSync(this.outputFileAll)) {
-        fs.writeFileSync(this.outputFileAll, '', 'utf8');
-        console.log(`📁 Fichier créé: ${this.outputFileAll}`);
-      }
       if (!fs.existsSync(this.outputFileLimited)) {
         fs.writeFileSync(this.outputFileLimited, '', 'utf8');
         console.log(`📁 Fichier créé: ${this.outputFileLimited}`);
@@ -414,15 +410,7 @@ class LichessProcessor {
           totalGames += result.totalGames;
           totalFilteredAll += result.filteredAll;
           totalFilteredLimited += result.filteredLimited;
-          totalFilteredEval += result.filteredEval;          // Écrire les parties ALL
-          if (result.gamesAll.length > 0) {
-            if (!writeStreamAll) {
-              writeStreamAll = createWriteStream(this.outputFileAll, { flags: 'a' });
-            }
-            for (const game of result.gamesAll) {
-              writeStreamAll.write(game + '\n\n');
-            }
-          }
+          totalFilteredEval += result.filteredEval;
 
           // Écrire les parties LIMITED
           if (result.gamesLimited.length > 0) {

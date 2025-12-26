@@ -72,7 +72,6 @@ class LichessMain {
   async initializeOutputFiles() {
     try {
       const fs = await import('fs');
-      await fs.promises.writeFile(this.processor.outputFileAll, '', 'utf8');
       await fs.promises.writeFile(this.processor.outputFileLimited, '', 'utf8');
       await fs.promises.writeFile(this.processor.outputFileEval, '', 'utf8');
       console.log('📁 Fichiers de sortie initialisés');
@@ -94,7 +93,6 @@ class LichessMain {
     console.log(`Traitement jusqu'à: ${lastAvailable}`);
     let currentDate = await this.readProgress();
     let totalProcessed = 0;
-    let totalFilteredAll = 0;
     let totalFilteredLimited = 0;
     let totalFilteredEval = 0;
 
@@ -154,7 +152,6 @@ class LichessMain {
         const stats = await this.processor.processDownloadedFile(processData);
 
         totalProcessed += stats.total;
-        totalFilteredAll += stats.filteredAll;
         totalFilteredLimited += stats.filteredLimited;
         totalFilteredEval += stats.filteredEval;
 
@@ -162,8 +159,8 @@ class LichessMain {
         await this.saveProgress(nextMonth);
 
         console.timeEnd(timerLabel);
-        console.log(`${currentDate} terminé: ${stats.filteredAll} all, ${stats.filteredLimited} limited, ${stats.filteredEval} eval`);
-        console.log(`Total: ${totalFilteredAll} all, ${totalFilteredLimited} limited, ${totalFilteredEval} eval sur ${totalProcessed}`);
+        console.log(`${currentDate} terminé: ${stats.filteredLimited} limited, ${stats.filteredEval} eval`);
+        console.log(`Total: ${totalFilteredLimited} limited, ${totalFilteredEval} eval sur ${totalProcessed}`);
         console.log(`📊 Queue: ${downloadQueue.size} téléchargements en cours`);
 
         currentDate = nextMonth;
@@ -195,14 +192,12 @@ class LichessMain {
     }
     console.log('\nTraitement terminé !');
     console.log(`Résumé final:`);
-    console.log(`  All: ${totalFilteredAll} parties (ELO >= 2200)`);
     console.log(`  Limited: ${totalFilteredLimited} parties (ELO >= 2200 + Temps >= 10min)`);
     console.log(`  Eval: ${totalFilteredEval} parties (ELO >= 2200 + évaluations engine)`);
     console.log(`  Total traité: ${totalProcessed} parties`);
 
     console.timeEnd('Temps total');
     console.log('\nTraitement terminé ! Fichiers finaux directement disponibles :');
-    console.log(`📁 ALL: ${this.processor.outputFileAll}`);
     console.log(`📁 LIMITED: ${this.processor.outputFileLimited}`);
     console.log(`📁 EVAL: ${this.processor.outputFileEval}`);
   }

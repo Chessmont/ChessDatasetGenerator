@@ -63,7 +63,7 @@ class FilterWorker {
         }
         const id = nanoid();
         const eventValue = this.extractHeaderValue(line, 'Event');
-        currentGame = `[ID "${id}"]\n[Source "Online"]\n${line}\n`;
+        currentGame = `[ID "${id}"]\n[Source "Online"]\n[Event "${eventValue}"]\n`;
         gameHeaders = { Event: eventValue, id };
         inGameMoves = false;
       }
@@ -74,16 +74,19 @@ class FilterWorker {
         } else if (line.startsWith('[BlackElo ')) {
           gameHeaders.BlackElo = parseInt(this.extractHeaderValue(line, 'BlackElo')) || 0;
           currentGame += line + '\n';
-          const maxElo = Math.max(gameHeaders.WhiteElo || 0, gameHeaders.BlackElo || 0);
-          currentGame += `[MaxElo "${maxElo}"]\n`;
         } else if (line.startsWith('[TimeControl ')) {
           gameHeaders.TimeControl = this.extractHeaderValue(line, 'TimeControl');
           currentGame += line + '\n';
-        } else {
+        } else if (!line.startsWith('[Event ')) {
           currentGame += line + '\n';
         }
       }
       else if (line.trim() === '' && currentGame && !inGameMoves) {
+        const maxElo = Math.max(gameHeaders.WhiteElo || 0, gameHeaders.BlackElo || 0);
+        currentGame = currentGame.replace(
+          /(\[Source "Online"\]\n)/,
+          `$1[MaxElo "${maxElo}"]\n`
+        );
         currentGame += line + '\n';
         inGameMoves = true;
       }
