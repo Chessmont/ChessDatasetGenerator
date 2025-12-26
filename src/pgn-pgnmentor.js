@@ -46,6 +46,8 @@ class PgnMentorMain {
       let totalGames = 0;
       let uniqueGames = 0;
       let duplicates = 0;
+      let pgnFilesProcessed = 0;
+      let zipFilesProcessed = 0;
 
 
       console.log('🎯 PHASE 1: Traitement des tournois (fichiers PGN directs)');
@@ -71,6 +73,7 @@ class PgnMentorMain {
           totalGames += stats.totalGames;
           uniqueGames += stats.uniqueGames;
           duplicates += stats.duplicatesFound;
+          pgnFilesProcessed++;
 
           progress.processedFiles.push(pgnLink.name);
           await this.saveProgress(progress);
@@ -85,7 +88,7 @@ class PgnMentorMain {
       }
 
       console.log(`\n📊 Résumé Phase 1 - Fichiers PGN:`);
-      console.log(`  Fichiers traités: ${remainingPgnFiles.length}/${allPgnLinks.length}`);
+      console.log(`  Fichiers traités: ${pgnFilesProcessed}/${allPgnLinks.length}`);
       console.log(`  Parties uniques ajoutées: ${uniqueGames}`);
       console.log(`  Doublons évités: ${duplicates}\n`);
 
@@ -109,6 +112,7 @@ class PgnMentorMain {
           totalGames += stats.totalGames;
           uniqueGames += stats.uniqueGames;
           duplicates += stats.duplicatesFound;
+          zipFilesProcessed++;
 
           progress.processedFiles.push(zipLink.name);
           await this.saveProgress(progress);
@@ -123,8 +127,8 @@ class PgnMentorMain {
       }
 
       console.log('\n📊 Résumé final:');
-      console.log(`  Fichiers PGN traités: ${allPgnLinks.length - remainingPgnFiles.length}/${allPgnLinks.length}`);
-      console.log(`  Fichiers ZIP traités: ${allZipLinks.length - remainingZipFiles.length}/${allZipLinks.length}`);
+      console.log(`  Fichiers PGN traités: ${pgnFilesProcessed}/${allPgnLinks.length}`);
+      console.log(`  Fichiers ZIP traités: ${zipFilesProcessed}/${allZipLinks.length}`);
       console.log(`  Total parties analysées: ${totalGames}`);
       console.log(`  Parties uniques conservées: ${uniqueGames}`);
       console.log(`  Doublons éliminés: ${duplicates}`);
