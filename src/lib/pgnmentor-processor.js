@@ -14,8 +14,8 @@ import { nanoid } from 'nanoid';
 class PGNMentorProcessor {
   constructor() {
     this.baseUrl = 'https://www.pgnmentor.com';
-    this.outputFile = './output/pgnmentor.pgn';
-    this.tempDir = './temp';
+    this.outputFile = './src/output/pgnmentor.pgn';
+    this.tempDir = './src/temp';
 
     // Déduplication - Set en mémoire des hash des parties
     this.gameHashes = new Set();
@@ -27,7 +27,7 @@ class PGNMentorProcessor {
     this.ensureDirectories();
   }
   ensureDirectories() {
-    const outputDir = './output';
+    const outputDir = './src/output';
     [outputDir, this.tempDir].forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -145,6 +145,20 @@ class PGNMentorProcessor {
     console.log('🔍 Scraping de la page PGN Mentor...');
 
     const html = await this.downloadContent('https://www.pgnmentor.com/files.html');
+    console.log(`📄 HTML téléchargé: ${html.length} caractères`);
+
+    // Debug: afficher quelques exemples de liens
+    const allLinks = html.match(/<a[^>]+href="[^"]*\.(pgn|zip)"[^>]*>/gi);
+    if (allLinks && allLinks.length > 0) {
+      console.log(`🔍 Exemples de liens trouvés:`);
+      allLinks.slice(0, 3).forEach(link => console.log(`  ${link}`));
+    } else {
+      console.log(`❌ Aucun lien .pgn ou .zip trouvé dans le HTML`);
+      // Afficher un extrait du HTML pour debug
+      const sample = html.slice(0, 500);
+      console.log(`📄 Extrait HTML:\n${sample}`);
+    }
+
     const links = [];
     const seenNames = new Set();
 
@@ -175,6 +189,8 @@ class PGNMentorProcessor {
     console.log('🔍 Scraping des fichiers ZIP...');
 
     const html = await this.downloadContent('https://www.pgnmentor.com/files.html');
+    console.log(`📄 HTML téléchargé: ${html.length} caractères`);
+
     const links = [];
     const seenNames = new Set();
 
@@ -213,7 +229,6 @@ class PGNMentorProcessor {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1'
           }
