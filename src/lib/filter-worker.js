@@ -4,6 +4,7 @@ import { parentPort } from 'worker_threads';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { nanoid } from 'nanoid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,19 +61,26 @@ class FilterWorker {
         if (currentGame) {
           processCompleteGame();
         }
-        currentGame = line + '\n';
-        gameHeaders = { Event: this.extractHeaderValue(line, 'Event') };
+        const id = nanoid();
+        const eventValue = this.extractHeaderValue(line, 'Event');
+        currentGame = `[ID "${id}"]\n[Source "Online"]\n${line}\n`;
+        gameHeaders = { Event: eventValue, id };
         inGameMoves = false;
       }
       else if (line.startsWith('[') && !inGameMoves) {
-        currentGame += line + '\n';
-
         if (line.startsWith('[WhiteElo ')) {
           gameHeaders.WhiteElo = parseInt(this.extractHeaderValue(line, 'WhiteElo')) || 0;
+          currentGame += line + '\n';
         } else if (line.startsWith('[BlackElo ')) {
           gameHeaders.BlackElo = parseInt(this.extractHeaderValue(line, 'BlackElo')) || 0;
+          currentGame += line + '\n';
+          const maxElo = Math.max(gameHeaders.WhiteElo || 0, gameHeaders.BlackElo || 0);
+          currentGame += `[MaxElo "${maxElo}"]\n`;
         } else if (line.startsWith('[TimeControl ')) {
           gameHeaders.TimeControl = this.extractHeaderValue(line, 'TimeControl');
+          currentGame += line + '\n';
+        } else {
+          currentGame += line + '\n';
         }
       }
       else if (line.trim() === '' && currentGame && !inGameMoves) {

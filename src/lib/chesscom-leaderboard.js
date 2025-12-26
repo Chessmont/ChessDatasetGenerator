@@ -14,7 +14,7 @@ const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 class ChesscomLeaderboard {
   constructor() {
     this.baseUrl = 'https://www.chess.com/callback/leaderboard/live?gameType=live';
-    this.outputFile = path.join(__dirname, '..', 'chesscomusername.pv');
+    this.outputFile = path.join(__dirname, '..', 'progress/chesscomusername.pv');
     this.targetCount = config.chesscom.numberOfUsersInLeaderboard;
   }
 

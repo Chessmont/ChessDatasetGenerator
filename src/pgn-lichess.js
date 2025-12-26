@@ -3,7 +3,7 @@
 import LichessProcessor from './lib/lichess-processor.js';
 import fs from 'fs';
 
-const PROGRESS_FILE = './scripts/lichess.pv';
+const PROGRESS_FILE = './progress/lichess.pv';
 
 class LichessMain {
   constructor() {

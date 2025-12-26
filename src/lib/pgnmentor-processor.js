@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import { pipeline } from 'stream/promises';
 import { Extract } from 'unzipper';
 import { createInterface } from 'readline';
+import { nanoid } from 'nanoid';
 
 class PGNMentorProcessor {
   constructor() {
@@ -363,7 +364,8 @@ class PGNMentorProcessor {
 
                 if (!this.gameHashes.has(hash)) {
                   this.gameHashes.add(hash);
-                  writeStream.write(game + '\n\n');
+                  const gameWithSource = this.addSourceTag(game);
+                  writeStream.write(gameWithSource + '\n\n');
                   uniqueGames++;
                 } else {
                   duplicatesFound++;
@@ -433,7 +435,8 @@ class PGNMentorProcessor {
         if (!this.gameHashes.has(hash)) {
           // Partie unique
           this.gameHashes.add(hash);
-          writeStream.write(game + '\n\n');
+          const gameWithSource = this.addSourceTag(game);
+          writeStream.write(gameWithSource + '\n\n');
           uniqueGames++;
         } else {
           duplicatesFound++;
@@ -451,6 +454,30 @@ class PGNMentorProcessor {
     } catch (error) {
       throw new Error(`Erreur traitement ${pgnLink.name}: ${error.message}`);
     }
+  }
+
+  /**
+   * Extrait MaxElo d'une partie PGN
+   */
+  extractMaxElo(gameText) {
+    const whiteEloMatch = gameText.match(/\[WhiteElo "(\d+)"\]/);
+    const blackEloMatch = gameText.match(/\[BlackElo "(\d+)"\]/);
+    const whiteElo = whiteEloMatch ? parseInt(whiteEloMatch[1]) : 0;
+    const blackElo = blackEloMatch ? parseInt(blackEloMatch[1]) : 0;
+    return Math.max(whiteElo, blackElo);
+  }
+
+  /**
+   * Ajoute les tags [ID], [Source "Official"], [MaxElo] avant [Event]
+   */
+  addSourceTag(game) {
+    const maxElo = this.extractMaxElo(game);
+    const id = nanoid();
+
+    return game.replace(
+      /\[Event ([^\]]+)\]/,
+      `[ID "${id}"]\n[Source "Official"]\n[MaxElo "${maxElo}"]\n[Event $1]`
+    );
   }
 
   /**

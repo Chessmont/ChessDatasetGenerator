@@ -15,7 +15,7 @@ class ChesscomMain {
     this.leaderboard = new ChesscomLeaderboard();
     this.archives = new ChesscomArchives();
     this.downloader = new ChesscomDownloader();
-    this.usernamesFile = path.join(__dirname, 'chesscomusername.pv');
+    this.usernamesFile = path.join(__dirname, 'progress/chesscomusername.pv');
   }
 
   /**
@@ -39,7 +39,7 @@ class ChesscomMain {
       await this.downloader.processAllArchives();      console.log('\n🏆 PIPELINE CHESS.COM TERMINÉ !');
       console.log('================================');
       console.log('✅ Toutes les étapes ont été complétées avec succès');
-      console.log('📁 Fichiers finaux disponibles dans: apps/backend/scripts/output/');
+      console.log('📁 Fichiers finaux disponibles dans: apps/backend/src/output/');
       console.log('📁 chesscom-all.pgn (toutes parties ELO≥2400)');
       console.log('📁 chesscom-limited.pgn (sans bullet, cadence≥180s)');
 

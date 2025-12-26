@@ -3,7 +3,7 @@
 import PGNMentorProcessor from './lib/pgnmentor-processor.js';
 import fs from 'fs';
 
-const PROGRESS_FILE = './scripts/pgnmentor.pv';
+const PROGRESS_FILE = './progress/pgnmentor.pv';
 
 class PgnMentorMain {
   constructor() {

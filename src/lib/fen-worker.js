@@ -23,12 +23,9 @@ function normalizeFen(fen) {
   return parts.join(' ');
 }
 
-const isOfficialSource = (site, pgn) => {
-  const officialSources = ['TWIC', 'PGNMentor', 'twic', 'pgnmentor'];
-  return officialSources.some(source =>
-    site?.toLowerCase().includes(source.toLowerCase()) ||
-    pgn.toLowerCase().includes(source.toLowerCase())
-  );
+const extractSource = (gameText) => {
+  const match = gameText.match(/\[Source\s+"([^"]+)"\]/);
+  return match ? match[1] : 'Unknown';
 };
 
 /**
@@ -88,7 +85,7 @@ function processGame(gameText) {
     const whiteElo = extractWhiteElo(gameText);
     const site = extractSite(gameText);
     const date = extractDate(gameText);
-    const official = isOfficialSource(site, gameText) ? 1 : 0;
+    const official = extractSource(gameText) === 'Official' ? 1 : 0;
 
     // Parser le PGN avec Chess.js
     const chess = new Chess();

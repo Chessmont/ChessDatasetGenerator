@@ -9,9 +9,9 @@ const __dirname = path.dirname(__filename);
 
 class ChesscomArchives {
   constructor() {
-    this.usernamesFile = path.join(__dirname, '..', 'chesscomusername.pv');
-    this.archiveUrlsFile = path.join(__dirname, '..', 'chesscom-archive-urls.pv');
-    this.processedUsersFile = path.join(__dirname, '..', 'chesscom-processed-users.pv');
+    this.usernamesFile = path.join(__dirname, '..', 'progress/chesscomusername.pv');
+    this.archiveUrlsFile = path.join(__dirname, '..', 'progress/chesscom-archive-urls.pv');
+    this.processedUsersFile = path.join(__dirname, '..', 'progress/chesscom-processed-users.pv');
   }
 
   /**

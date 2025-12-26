@@ -16,7 +16,7 @@ temp2
 dataset
 output
 *.pv
-
+exec
 
 # Env
 env.json

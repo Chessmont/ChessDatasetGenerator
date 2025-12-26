@@ -32,6 +32,7 @@ class LichessProcessor {
     this.outputFileEval = path.join(this.outputDir, `lichess-eval.pgn`);
 
     this.tempDir = path.join(__dirname, '..', 'temp');
+
     this.ensureDirectories();
   }  ensureDirectories() {
     [this.outputDir, this.tempDir].forEach(dir => {
@@ -409,6 +410,7 @@ class LichessProcessor {
             chunkText: chunkText,
             chunkId: id
           });
+
           totalGames += result.totalGames;
           totalFilteredAll += result.filteredAll;
           totalFilteredLimited += result.filteredLimited;

@@ -241,27 +241,10 @@ class DatasetGenerator {
   }
 
   /**
-   * ÉTAPE 6: Ajoute les IDs au fichier final
-   */
-  async addIds() {
-    console.log('\n🏷️  PHASE 6: AJOUT DES IDs');
-    console.log('==========================');
-
-    const addIdsScript = path.join(this.srcDir, 'add-ids.js');
-
-
-    const sourceFile = this.withOnlineGame ? this.finalPGN : this.officialPGN;
-    const sourceLabel = this.withOnlineGame ? config.finalPGNFileName : config.officialPGNFileName;
-
-    console.log(`🏷️  Ajout des IDs → ${sourceLabel}`);
-    await this.runNodeScript(addIdsScript, [sourceFile]);
-  }
-
-  /**
-   * ÉTAPE 7: Génère les FENs (optionnel)
+   * ÉTAPE 6: Génère les FENs (optionnel)
    */
   async generateFens() {
-    console.log('\n♟️  PHASE 7: GÉNÉRATION DES FENs');
+    console.log('\n♟️  PHASE 6: GÉNÉRATION DES FENs');
     console.log('===============================');
 
     // Vérifier si la génération des FENs est activée
@@ -312,10 +295,7 @@ class DatasetGenerator {
       await this.compileFinal();
 
 
-      await this.addIds();
-
-
-      // ÉTAPE 7: Génération des FENs (selon configuration)
+      // ÉTAPE 6: Génération des FENs (selon configuration)
       await this.generateFens();
 
 
@@ -386,8 +366,8 @@ Options:
 Description:
   Lance le processus complet de génération du dataset d'échecs selon la configuration.
 
-PROCESSUS (7 ÉTAPES):
-  1. 🌐 Téléchargement des sources
+PROCESSUS (6 ÉTAPES):
+  1. 🌐 Téléchargement des sources (IDs ajoutés automatiquement)
      ${config.withOnlineGame ? '• TWIC, PGN Mentor, Chess.com, Lichess' : '• TWIC, PGN Mentor uniquement'}
 
   2. 🔧 Compilation officielle (TWIC + PGN Mentor → ${config.officialPGNFileName})
@@ -399,9 +379,7 @@ PROCESSUS (7 ÉTAPES):
 
   5. 📦 Compilation finale${config.withOnlineGame ? ` (toutes sources → ${config.finalPGNFileName})` : ' (ignorée)'}
 
-  6. 🏷️  Ajout des IDs au fichier final
-
-  7. ♟️  Génération des FENs (selon configuration)
+  6. ♟️  Génération des FENs (selon configuration)
 
 Configuration actuelle (config.json):
   • ELO minimum: ${config.minOnlineElo}

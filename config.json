@@ -11,6 +11,6 @@
 
   "chesscom" : {
     "numberOfUsersInLeaderboard" : 10000,
-    "userAgent" : "exemple/1.0 (contact: your@mail.com)"
+    "userAgent" : "Chessmont/1.0 (contact: contact@chessmont.com)"
   }
 }

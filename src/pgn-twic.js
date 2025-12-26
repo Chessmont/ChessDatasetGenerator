@@ -3,7 +3,7 @@
 import TwicProcessor from './lib/twic-processor.js';
 import fs from 'fs';
 
-const PROGRESS_FILE = './scripts/twic.pv';
+const PROGRESS_FILE = './src/progress/twic.pv';
 
 class TwicMain {
   constructor() {
@@ -56,19 +56,20 @@ class TwicMain {
           const timerLabel = `Temps semaine ${currentWeek}`;
           console.time(timerLabel);
 
-          const stats = await this.processor.processWeek(currentWeek);          totalProcessed += 1;
+          const stats = await this.processor.processWeek(currentWeek);
+
+          totalProcessed += 1;
           totalGames += stats.totalGames;
           consecutiveErrors = 0;
-
-
-          const nextWeek = currentWeek + 1;
-          await this.saveProgress(nextWeek);
 
           console.timeEnd(timerLabel);
           console.log(`✅ Semaine ${currentWeek} terminée: ${stats.totalGames} parties`);
           console.log(`📊 Total: ${totalGames} parties sur ${totalProcessed} semaines`);
 
-          currentWeek = nextWeek;        } catch (error) {
+          currentWeek++;
+          await this.saveProgress(currentWeek);
+
+        } catch (error) {
           consecutiveErrors++;
           console.error(`❌ Erreur semaine ${currentWeek} (tentative ${consecutiveErrors}/${maxRetries}): ${error.message}`);
 
@@ -87,7 +88,7 @@ class TwicMain {
       console.log(`Résumé final:`);
       console.log(`  Semaines traitées: ${totalProcessed}`);
       console.log(`  Total parties: ${totalGames}`);
-      console.log(`  Fichier final: ./scripts/output/twic.pgn`);
+      console.log(`  Fichier final: ./src/output/twic.pgn`);
 
     } catch (error) {
       console.error('Erreur fatale:', error.message);

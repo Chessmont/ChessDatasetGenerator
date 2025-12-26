@@ -4,17 +4,18 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import unzipper from 'unzipper';
+import { nanoid } from 'nanoid';
 
 class TwicProcessor {  constructor() {
     this.baseUrl = 'https://theweekinchess.com/zips/';
     this.twicPageUrl = 'https://theweekinchess.com/twic';
-    this.outputFile = './output/twic.pgn';
-    this.tempDir = './temp';
+    this.outputFile = './src/output/twic.pgn';
+    this.tempDir = './src/temp';
     this.ensureDirectories();
   }
 
   ensureDirectories() {
-    const outputDir = './scripts/output';
+    const outputDir = './src/output';
     [outputDir, this.tempDir].forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -240,7 +241,8 @@ class TwicProcessor {  constructor() {
               writeStream.write('\n');
             }
 
-            writeStream.write(content);
+            const contentWithSource = this.addSourceTag(content);
+            writeStream.write(contentWithSource);
 
             // S'assurer qu'il y a un saut de ligne après
             if (!content.endsWith('\n')) {
@@ -264,6 +266,40 @@ class TwicProcessor {  constructor() {
       throw error;
     }
   }
+  /**
+   * Extrait MaxElo d'une partie PGN
+   */
+  extractMaxElo(gameText) {
+    const whiteEloMatch = gameText.match(/\[WhiteElo "(\d+)"\]/);
+    const blackEloMatch = gameText.match(/\[BlackElo "(\d+)"\]/);
+    const whiteElo = whiteEloMatch ? parseInt(whiteEloMatch[1]) : 0;
+    const blackElo = blackEloMatch ? parseInt(blackEloMatch[1]) : 0;
+    return Math.max(whiteElo, blackElo);
+  }
+
+  /**
+   * Ajoute les tags [ID], [Source "Official"], [MaxElo] avant [Event]
+   */
+  addSourceTag(content) {
+    const games = content.split(/(?=\[Event )/);
+    const processedGames = games.map(game => {
+      if (!game.trim() || !game.includes('[Event ')) return game;
+
+      const maxElo = this.extractMaxElo(game);
+      const id = nanoid();
+      const eventMatch = game.match(/\[Event ([^\]]+)\]/);
+
+      if (!eventMatch) return game;
+
+      return game.replace(
+        /\[Event ([^\]]+)\]/,
+        `[ID "${id}"]\n[Source "Official"]\n[MaxElo "${maxElo}"]\n[Event $1]`
+      );
+    });
+
+    return processedGames.join('');
+  }
+
   /**
    * Supprime un fichier
    */

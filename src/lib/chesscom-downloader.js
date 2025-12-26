@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import { nanoid } from 'nanoid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,9 +15,9 @@ const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 class ChesscomDownloader {
   constructor() {
-    this.archiveUrlsFile = path.join(__dirname, '..', 'chesscom-archive-urls.pv');
-    this.processedUrlsFile = path.join(__dirname, '..', 'chesscom-processed-urls.pv');
-    this.errorUrlsFile = path.join(__dirname, '..', 'chesscom-error-urls.pv');
+    this.archiveUrlsFile = path.join(__dirname, '..', 'progress/chesscom-archive-urls.pv');
+    this.processedUrlsFile = path.join(__dirname, '..', 'progress/chesscom-processed-urls.pv');
+    this.errorUrlsFile = path.join(__dirname, '..', 'progress/chesscom-error-urls.pv');
     this.outputDir = path.join(__dirname, '..', 'output');
 
     // Générer les noms de fichiers basés sur la configuration
@@ -24,7 +25,6 @@ class ChesscomDownloader {
     const minTime = config.minGameTime;
     this.outputFileAll = path.join(this.outputDir, `chesscom-${minElo}.pgn`);
     this.outputFileLimited = path.join(this.outputDir, `chesscom-${minElo}-${minTime}.pgn`);
-
 
     this.CHUNK_SIZE = 5000000;
     this.hashChunks = [];
@@ -277,10 +277,24 @@ class ChesscomDownloader {
   }
 
   /**
+   * Enrichit un PGN avec [ID], [Source "Online"] et [MaxElo]
+   */
+  enrichPgn(pgn) {
+    const whiteElo = this.extractElo(pgn, 'WhiteElo') || 0;
+    const blackElo = this.extractElo(pgn, 'BlackElo') || 0;
+    const maxElo = Math.max(whiteElo, blackElo);
+    const id = nanoid();
+
+    return pgn.replace(
+      /\[Event ([^\]]+)\]/,
+      `[ID "${id}"]\n[Source "Online"]\n[MaxElo "${maxElo}"]\n[Event $1]`
+    );
+  }
+
+  /**
    * Compte le nombre de coups dans une partie
    */
   countMoves(pgn) {
-
     const lines = pgn.split('\n');
     const moveLines = lines.filter(line =>
       !line.startsWith('[') &&
@@ -365,7 +379,8 @@ class ChesscomDownloader {
    */
   async saveGameAll(pgn) {
     try {
-      await fs.promises.appendFile(this.outputFileAll, pgn + '\n\n', 'utf8');
+      const enrichedPgn = this.enrichPgn(pgn);
+      await fs.promises.appendFile(this.outputFileAll, enrichedPgn + '\n\n', 'utf8');
     } catch (error) {
       console.error(`Erreur sauvegarde partie ALL: ${error.message}`);
     }  }
@@ -375,7 +390,8 @@ class ChesscomDownloader {
    */
   async saveGameLimited(pgn) {
     try {
-      await fs.promises.appendFile(this.outputFileLimited, pgn + '\n\n', 'utf8');
+      const enrichedPgn = this.enrichPgn(pgn);
+      await fs.promises.appendFile(this.outputFileLimited, enrichedPgn + '\n\n', 'utf8');
     } catch (error) {
       console.error(`Erreur sauvegarde partie LIMITED: ${error.message}`);
     }  }
