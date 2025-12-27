@@ -23,7 +23,6 @@ class ChesscomDownloader {
     // Générer les noms de fichiers basés sur la configuration
     const minElo = config.minOnlineElo;
     const minTime = config.minGameTime;
-    this.outputFileAll = path.join(this.outputDir, `chesscom-${minElo}.pgn`);
     this.outputFileLimited = path.join(this.outputDir, `chesscom-${minElo}-${minTime}.pgn`);
 
     this.CHUNK_SIZE = 5000000;
@@ -36,7 +35,6 @@ class ChesscomDownloader {
       totalArchives: 0,
       processedArchives: 0,
       totalGames: 0,
-      allGames: 0,
       limitedGames: 0,
       duplicateGames: 0,
       errors: 0
@@ -57,10 +55,6 @@ class ChesscomDownloader {
    */
   initializeOutputFiles() {
     try {
-      if (!fs.existsSync(this.outputFileAll)) {
-        fs.writeFileSync(this.outputFileAll, '', 'utf8');
-        console.log(`📁 Fichier créé: ${this.outputFileAll}`);
-      }
       if (!fs.existsSync(this.outputFileLimited)) {
         fs.writeFileSync(this.outputFileLimited, '', 'utf8');
         console.log(`📁 Fichier créé: ${this.outputFileLimited}`);
@@ -346,44 +340,29 @@ class ChesscomDownloader {
         const gameHash = this.generateGameHash(game.pgn);
         if (!gameHash) {
           continue;
-        }        if (this.hasHash(gameHash)) {
+        }
+
+        if (this.hasHash(gameHash)) {
           this.stats.duplicateGames++;
           continue;
         }
 
-
-        const passesAll = this.meetsFilterCriteriaAll(game);
-        if (passesAll) {
+        const passesLimited = this.meetsFilterCriteriaLimited(game);
+        if (passesLimited) {
           this.addHash(gameHash);
-          await this.saveGameAll(game.pgn);
-          filteredCountAll++;
-          this.stats.allGames++;
-
-
-          const passesLimited = this.meetsFilterCriteriaLimited(game);
-          if (passesLimited) {
-            await this.saveGameLimited(game.pgn);
-            filteredCountLimited++;            this.stats.limitedGames++;
-          }
+          await this.saveGameLimited(game.pgn);
+          filteredCountLimited++;
+          this.stats.limitedGames++;
         }
-      }return { all: filteredCountAll, limited: filteredCountLimited };
+      }
+
+      return { limited: filteredCountLimited };
     } catch (error) {
       await this.markUrlError(url);
       this.stats.errors++;
-      return { all: 0, limited: 0 };
+      return { limited: 0 };
     }
   }
-
-  /**
-   * Sauvegarde une partie dans le fichier ALL
-   */
-  async saveGameAll(pgn) {
-    try {
-      const enrichedPgn = this.enrichPgn(pgn);
-      await fs.promises.appendFile(this.outputFileAll, enrichedPgn + '\n\n', 'utf8');
-    } catch (error) {
-      console.error(`Erreur sauvegarde partie ALL: ${error.message}`);
-    }  }
 
   /**
    * Sauvegarde une partie dans le fichier LIMITED
@@ -402,7 +381,7 @@ class ChesscomDownloader {
     const progress = ((this.stats.processedArchives / this.stats.totalArchives) * 100).toFixed(1);
     const eta = this.calculateETA();
     const elapsed = this.getElapsedTime();
-    process.stdout.write(`\r📊 [${progress}%] ${this.stats.processedArchives}/${this.stats.totalArchives} archives | 🎯 ${this.stats.allGames} parties (${this.stats.limitedGames} limited) | 🔄 ${this.stats.duplicateGames} doublons | ❌ ${this.stats.errors} erreurs | ⏱️  ${elapsed}${eta ? ` / ETA ${eta}` : ''}`);
+    process.stdout.write(`\r📊 [${ progress}%] ${this.stats.processedArchives}/${this.stats.totalArchives} archives | 🎯 ${this.stats.limitedGames} parties | 🔄 ${this.stats.duplicateGames} doublons | ❌ ${this.stats.errors} erreurs | ⏱️  ${elapsed}${eta ? ` / ETA ${eta}` : ''}`);
   }
 
   /**
@@ -450,15 +429,10 @@ class ChesscomDownloader {
     }    this.stats.totalArchives = remainingUrls.length;
     console.log(`🎯 ${remainingUrls.length} archives à traiter`);
 
-
-    if (!fs.existsSync(this.outputFileAll)) {
-      await fs.promises.writeFile(this.outputFileAll, '', 'utf8');
-      console.log(`📁 Fichier créé: ${this.outputFileAll}`);
-    }    if (!fs.existsSync(this.outputFileLimited)) {
+    if (!fs.existsSync(this.outputFileLimited)) {
       await fs.promises.writeFile(this.outputFileLimited, '', 'utf8');
       console.log(`📁 Fichier créé: ${this.outputFileLimited}`);
     }
-
 
     await this.preloadExistingHashes();
 
@@ -477,36 +451,27 @@ class ChesscomDownloader {
     console.log(`⏱️  Durée: ${duration} minutes`);
     console.log(`📊 Archives traitées: ${this.stats.processedArchives}`);
     console.log(`📊 Parties totales: ${this.stats.totalGames}`);
-    console.log(`📊 Parties ALL (ELO≥${config.minOnlineElo}): ${this.stats.allGames}`);
     console.log(`📊 Parties LIMITED (ELO≥${config.minOnlineElo} + cadence≥${config.minGameTime}s): ${this.stats.limitedGames}`);
     console.log(`📊 Doublons évités: ${this.stats.duplicateGames}`);
     console.log(`📊 Erreurs: ${this.stats.errors}`);
-    console.log(`📁 Fichier ALL: ${this.outputFileAll}`);
     console.log(`📁 Fichier LIMITED: ${this.outputFileLimited}`);
 
-
     try {
-      const statsAll = await fs.promises.stat(this.outputFileAll);
-      const sizeMBAll = (statsAll.size / 1024 / 1024).toFixed(1);
-      console.log(`📊 Taille ALL: ${sizeMBAll} MB`);
-
       const statsLimited = await fs.promises.stat(this.outputFileLimited);
       const sizeMBLimited = (statsLimited.size / 1024 / 1024).toFixed(1);
       console.log(`📊 Taille LIMITED: ${sizeMBLimited} MB`);
     } catch (error) {
-      console.warn('Impossible de récupérer la taille des fichiers');
+      console.warn('Impossible de récupérer la taille du fichier');
     }
   }
   /**
-   * Précharge les hashs des parties déjà présentes dans le fichier ALL
+   * Précharge les hashs des parties déjà présentes dans le fichier LIMITED
    * pour éviter les doublons lors d'une reprise de téléchargement
    */
   async preloadExistingHashes() {
     console.log('🔄 Préchargement des hashs existants...');
 
-
-
-    const filePath = this.outputFileAll;
+    const filePath = this.outputFileLimited;
     let totalPreloadedGames = 0;
 
     if (!fs.existsSync(filePath)) {

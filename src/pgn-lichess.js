@@ -3,6 +3,9 @@
 import LichessProcessor from './lib/lichess-processor.js';
 import fs from 'fs';
 
+const configPath = path.join(__dirname, '..', 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
 const PROGRESS_FILE = './src/progress/lichess.pv';
 
 class LichessMain {
@@ -192,8 +195,8 @@ class LichessMain {
     }
     console.log('\nTraitement terminé !');
     console.log(`Résumé final:`);
-    console.log(`  Limited: ${totalFilteredLimited} parties (ELO >= 2200 + Temps >= 10min)`);
-    console.log(`  Eval: ${totalFilteredEval} parties (ELO >= 2200 + évaluations engine)`);
+    console.log(`  Limited: ${totalFilteredLimited} parties (ELO >= ${config.minOnlineElo} + Temps >= ${config.minGameTime}s)`);
+    console.log(`  Eval: ${totalFilteredEval} parties (ELO >= ${config.minOnlineElo} + évaluations engine)`);
     console.log(`  Total traité: ${totalProcessed} parties`);
 
     console.timeEnd('Temps total');
