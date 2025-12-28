@@ -2,12 +2,7 @@
 
 import { parentPort } from 'worker_threads';
 import { Chess } from 'chess.js';
-import {city64} from 'google-cityhash';
-
-/**
- * Worker pour traiter un batch de parties PGN et extraire les positions FEN
- */
-
+import cityhash from 'google-cityhash';
 
 /**
  * Normalise un FEN pour ne garder que les 4 premiers champs
@@ -94,7 +89,7 @@ function processGame(gameText) {
     for (let i = 0; i < history.length; i++) {
       const currentFen = replayChess.fen();
       const normalizedFen = normalizeFen(currentFen);
-      const hashFen = city64(normalizedFen);
+      const hashFen = cityhash.city64(normalizedFen);
       positions.push({
         hashFen: hashFen.toString(),
         fen: normalizedFen,
@@ -110,7 +105,7 @@ function processGame(gameText) {
 
     const finalFen = replayChess.fen();
     const normalizedFinalFen = normalizeFen(finalFen);
-    const hashFinalFen = city64(normalizedFinalFen);
+    const hashFinalFen = cityhash.city64(normalizedFinalFen);
     positions.push({
       hashFen: hashFinalFen.toString(),
       fen: normalizedFinalFen,
