@@ -21,7 +21,7 @@ class ComputerGameRemover {
 
     this.inputFile = inputFile;
     this.tempFile = inputFile + '.remove';
-    this.computerEventPattern = /\[Event .*\b(TCEC|CCC|WCCC|Computer|ICGA)\b/i;
+    this.computerEventPattern = /\[Event .*(TCEC|CCC [Ss]|WCCC|Computer Chess|ICGA)/i;
 
     this.stats = {
       totalGames: 0,

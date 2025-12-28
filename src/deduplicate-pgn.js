@@ -195,7 +195,7 @@ class PgnDeduplicator {
       crlfDelay: Infinity
     });
 
-    console.log('🔄 Traitement en streaming (détection par [Event)...');
+    console.log('🔄 Traitement en streaming (détection par [ID)...');
 
     let currentGame = '';
     let lineCount = 0;
@@ -215,7 +215,7 @@ class PgnDeduplicator {
       }
 
 
-      if (line.startsWith('[Event ')) {
+      if (line.startsWith('[ID ')) {
 
         if (currentGame.trim() !== '') {
           this.stats.totalGames++;
