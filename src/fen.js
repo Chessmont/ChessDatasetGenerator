@@ -190,7 +190,7 @@ class FenProcessor {
 
     // fs.closeSync(fd);
 
-    this.totalGames = 21512376;
+    this.totalGames = 24191495;
     console.log(`\n📊 ${this.totalGames.toLocaleString()} parties trouvées dans le fichier`);
 
     const estimatedPositions = Math.round(this.totalGames * 87.67);
