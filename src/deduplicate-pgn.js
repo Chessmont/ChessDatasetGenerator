@@ -73,7 +73,8 @@ class PgnDeduplicator {
     const dateMatch = pgn.match(/\[Date "([^"]+)"\]/);
     const siteMatch = pgn.match(/\[Site "([^"]+)"\]/);
     const whiteEloMatch = pgn.match(/\[WhiteElo "([^"]+)"\]/);
-    const blackEloMatch = pgn.match(/\[BlackElo "([^"]+)"\]/);    if (!whiteMatch || !blackMatch || !dateMatch) {
+    const blackEloMatch = pgn.match(/\[BlackElo "([^"]+)"\]/);
+    if (!whiteMatch || !blackMatch || !dateMatch) {
       return `unique-${Date.now()}-${Math.random()}`;
     }
 
@@ -232,7 +233,7 @@ class PgnDeduplicator {
               this.stats.uniqueGames++;
 
 
-              writeStream.write(currentGame + '\n\n');
+              writeStream.write(currentGame);
             }
           }
         }
@@ -255,7 +256,7 @@ class PgnDeduplicator {
         } else {
           this.addHash(gameHash);
           this.stats.uniqueGames++;
-          writeStream.write(currentGame + '\n\n');
+          writeStream.write(currentGame);
         }
       }
     }
