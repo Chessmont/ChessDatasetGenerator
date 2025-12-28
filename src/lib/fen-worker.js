@@ -2,16 +2,12 @@
 
 import { parentPort } from 'worker_threads';
 import { Chess } from 'chess.js';
-import { createHash } from 'crypto';
+import {city64} from 'google-cityhash';
 
 /**
  * Worker pour traiter un batch de parties PGN et extraire les positions FEN
  */
 
-const cityHash64 = (str) => {
-  const hash = createHash('sha256').update(str).digest();
-  return hash.readBigUInt64LE(0);
-};
 
 /**
  * Normalise un FEN pour ne garder que les 4 premiers champs
@@ -44,8 +40,8 @@ function extractGameId(gameText) {
   return match ? match[1] : null;
 }
 
-function extractWhiteElo(gameText) {
-  const match = gameText.match(/\[WhiteElo\s+"([^"]+)"\]/);
+function extractMaxElo(gameText) {
+  const match = gameText.match(/\[MaxElo\s+"([^"]+)"\]/);
   if (!match) return 0;
   const elo = parseInt(match[1]);
   return isNaN(elo) ? 0 : elo;
@@ -82,10 +78,9 @@ function processGame(gameText) {
       return positions;
     }
 
-    const whiteElo = extractWhiteElo(gameText);
-    const site = extractSite(gameText);
+    const maxElo = extractMaxElo(gameText);
     const date = extractDate(gameText);
-    const official = extractSource(gameText) === 'Official' ? 1 : 0;
+    const official = extractSource(gameText) === 'Online' ? 0 : 1;
 
     // Parser le PGN avec Chess.js
     const chess = new Chess();
@@ -99,15 +94,15 @@ function processGame(gameText) {
     for (let i = 0; i < history.length; i++) {
       const currentFen = replayChess.fen();
       const normalizedFen = normalizeFen(currentFen);
-      const hashFen = cityHash64(normalizedFen);
+      const hashFen = city64(normalizedFen);
       positions.push({
         hashFen: hashFen.toString(),
         fen: normalizedFen,
-        result: result,
-        gameId: gameId,
-        whiteElo: whiteElo,
-        official: official,
-        date: date
+        result,
+        gameId,
+        maxElo,
+        official,
+        date
       });
 
       replayChess.move(history[i].san);
@@ -115,15 +110,15 @@ function processGame(gameText) {
 
     const finalFen = replayChess.fen();
     const normalizedFinalFen = normalizeFen(finalFen);
-    const hashFinalFen = cityHash64(normalizedFinalFen);
+    const hashFinalFen = city64(normalizedFinalFen);
     positions.push({
       hashFen: hashFinalFen.toString(),
       fen: normalizedFinalFen,
-      result: result,
-      gameId: gameId,
-      whiteElo: whiteElo,
-      official: official,
-      date: date
+      result,
+      gameId,
+      maxElo,
+      official,
+      date
     });
 
   } catch (error) {

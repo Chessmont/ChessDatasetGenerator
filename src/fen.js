@@ -221,7 +221,7 @@ class FenProcessor {
       }
 
       this.indexWriteStream = fs.createWriteStream(this.positionIndexFile, { encoding: 'utf8' });
-      this.indexWriteStream.write('hashFen\tfen\tgameId\twhiteElo\tofficial\tdate\n');
+      this.indexWriteStream.write('hashFen\tfen\tgameId\tmaxElo\tofficial\tdate\n');
     }
 
     this.positionsInCurrentChunk = 0;
@@ -245,7 +245,7 @@ class FenProcessor {
 
 
       if (position.gameId) {
-        const indexLine = `${position.hashFen}\t${position.fen}\t${position.gameId}\t${position.whiteElo}\t${position.official}\t${position.date}\n`;
+        const indexLine = `${position.hashFen}\t${position.fen}\t${position.gameId}\t${position.maxElo}\t${position.official}\t${position.date}\n`;
         this.indexWriteStream.write(indexLine);
       }
 
@@ -519,15 +519,15 @@ class FenProcessor {
             const hashB = BigInt(b.split('|')[0]);
             return hashA < hashB ? -1 : hashA > hashB ? 1 : 0;
           });
-          
-          const writeStream = fs.createWriteStream(sortedFile, { 
+
+          const writeStream = fs.createWriteStream(sortedFile, {
             encoding: 'utf8',
             highWaterMark: 8 * 1024 * 1024
           });
 
           let buffer = '';
           const bufferLimit = 4 * 1024 * 1024;
-          
+
           for (const line of lines) {
             buffer += line + '\n';
             if (buffer.length >= bufferLimit) {
@@ -535,7 +535,7 @@ class FenProcessor {
               buffer = '';
             }
           }
-          
+
           if (buffer.length > 0) {
             writeStream.write(buffer);
           }
