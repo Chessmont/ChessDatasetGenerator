@@ -48,7 +48,7 @@ console.log(`📄 Output: ${outputFile}\n`);
 const fixMaxElo = (gameText) => {
   const whiteEloMatch = gameText.match(/\[WhiteElo "(\d+)"\]/);
   const blackEloMatch = gameText.match(/\[BlackElo "(\d+)"\]/);
-  
+
   const whiteElo = whiteEloMatch ? parseInt(whiteEloMatch[1]) : 0;
   const blackElo = blackEloMatch ? parseInt(blackEloMatch[1]) : 0;
   const correctMaxElo = Math.max(whiteElo, blackElo);
@@ -70,12 +70,12 @@ const fixMaxElo = (gameText) => {
 const processFile = () => {
   console.time('⏱️  Traitement');
 
-  const readStream = fs.createReadStream(inputFile, { 
-    encoding: 'utf8', 
-    highWaterMark: 16 * 1024 * 1024 
+  const readStream = fs.createReadStream(inputFile, {
+    encoding: 'utf8',
+    highWaterMark: 16 * 1024 * 1024
   });
-  
-  const writeStream = fs.createWriteStream(outputFile, { 
+
+  const writeStream = fs.createWriteStream(outputFile, {
     encoding: 'utf8',
     highWaterMark: 16 * 1024 * 1024
   });
@@ -98,7 +98,7 @@ const processFile = () => {
         if (inGame && currentGame.trim()) {
           const oldMaxEloMatch = currentGame.match(/\[MaxElo "(\d+)"\]/);
           const fixedGame = fixMaxElo(currentGame);
-          
+
           if (fixedGame === null) {
             gamesDeleted++;
           } else {
