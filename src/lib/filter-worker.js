@@ -83,6 +83,7 @@ class FilterWorker {
       }
       else if (line.trim() === '' && currentGame && !inGameMoves) {
         const maxElo = Math.max(gameHeaders.WhiteElo || 0, gameHeaders.BlackElo || 0);
+        currentGame = currentGame.replace(/\[MaxElo "[^"]*"\]\n?/g, '');
         currentGame = currentGame.replace(
           /(\[Source "Online"\]\n)/,
           `$1[MaxElo "${maxElo}"]\n`

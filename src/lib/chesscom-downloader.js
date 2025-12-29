@@ -279,7 +279,9 @@ class ChesscomDownloader {
     const maxElo = Math.max(whiteElo, blackElo);
     const id = nanoid();
 
-    return pgn.replace(
+    const cleanPgn = pgn.replace(/\[MaxElo "[^"]*"\]\n?/g, '');
+
+    return cleanPgn.replace(
       /\[Event ([^\]]+)\]/,
       `[ID "${id}"]\n[Source "Online"]\n[MaxElo "${maxElo}"]\n[Event $1]`
     );

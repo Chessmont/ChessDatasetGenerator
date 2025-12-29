@@ -489,7 +489,9 @@ class PGNMentorProcessor {
     const maxElo = this.extractMaxElo(game);
     const id = nanoid();
 
-    return game.replace(
+    const cleanGame = game.replace(/\[MaxElo "[^"]*"\]\n?/g, '');
+
+    return cleanGame.replace(
       /\[Event ([^\]]+)\]/,
       `[ID "${id}"]\n[Source "Official"]\n[MaxElo "${maxElo}"]\n[Event $1]`
     );
