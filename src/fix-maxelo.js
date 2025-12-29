@@ -94,7 +94,7 @@ const processFile = () => {
     buffer = lines.pop() || '';
 
     for (const line of lines) {
-      if (line.startsWith('[ID ') || line.startsWith('[Event ')) {
+      if (line.startsWith('[ID ')) {
         if (inGame && currentGame.trim()) {
           const oldMaxEloMatch = currentGame.match(/\[MaxElo "(\d+)"\]/);
           const fixedGame = fixMaxElo(currentGame);
